@@ -13,6 +13,7 @@
 - VS Code 추천 확장과 저장할 때 자동 포맷 설정 (#10)
 - 화면 방식과 UI 프레임워크 결정 기록: 툴바 배지와 사이드 패널, Preact (#11)
 - CI에 Firefox 빌드 검사 (#13)
+- 전체 계획 문서 `docs/ROADMAP.md` (#14)
 
 ### 변경
 
@@ -21,6 +22,7 @@
 - TypeScript를 7.0에서 6.0으로 고정. typescript-eslint가 아직 7을 지원하지 않음 (#9)
 - CI의 `actions/checkout`, `actions/setup-node`를 v7로 올림. v4의 Node 20 지원 종료 경고 해소 (#13)
 - 문서와 PR 템플릿의 브라우저 안내를 Chrome 계열(Chrome, Edge) 기준으로 바꿈 (#13)
+- 확장 방향 변경: KLAS를 보고 있을 때만 돕고, 화면은 브라우저 사이드 패널 대신 KLAS 안의 탭으로 바꿈. KLAS 요청은 KLAS 탭에서 보내고, 세션 연장과 확장 표시 원칙을 추가함. 알림과 툴바 배지는 추가 기능으로 미룸 (#14)
 
 ### 수정
 
