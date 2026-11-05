@@ -32,8 +32,8 @@ body:
         - KLAS API 계층
         - background (캐시, 메시지)
         - 알림
-        - 툴바 배지, 팝업
-        - 사이드 패널
+        - 툴바 배지
+        - KLAS 탭
         - content script (KLAS 화면)
         - MAIN world 스크립트
         - 빌드, CI
