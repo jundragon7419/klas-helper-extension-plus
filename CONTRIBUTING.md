@@ -42,13 +42,34 @@ npm run dev:firefox  # Firefox
 | `npm run zip` | Chrome 웹스토어 제출용 zip |
 | `npm run zip:firefox` | Firefox 부가 기능 사이트 제출용 zip |
 | `npm run typecheck` | 타입 검사 |
+| `npm run lint` | ESLint 검사 |
+| `npm run format` | Prettier로 코드 정리 |
+| `npm run format:check` | 코드 형식 검사 (고치지 않음) |
+| `npm test` | 테스트 한 번 실행 |
+| `npm run test:watch` | 파일이 바뀔 때마다 테스트 다시 실행 |
+
+### PR을 열기 전에
+
+아래 명령이 모두 통과해야 합니다. CI도 같은 순서로 검사합니다.
+
+```shell
+npm run lint
+npm run format:check
+npm test
+npm run typecheck
+npm run build
+```
+
+형식 검사가 실패하면 `npm run format`으로 고친 뒤 다시 커밋하면 됩니다. Prettier는 코드와 설정 파일에만 적용하고 마크다운 문서에는 적용하지 않습니다.
+
+VS Code를 쓰면 저장소를 열 때 ESLint와 Prettier 확장 설치를 권하는 알림이 뜹니다. 설치해 두면 저장할 때 자동으로 형식이 맞춰집니다.
 
 ## 작업 순서
 
 1. 작업할 내용을 이슈로 먼저 올리거나, 기존 이슈에 댓글로 맡겠다고 알려 주세요.
 2. 저장소를 fork하고 `develop`에서 브랜치를 만듭니다. 브랜치 이름은 아래 [브랜치](#브랜치) 절을 따릅니다.
 3. PR은 `develop`으로 보냅니다. PR 하나에는 기능 하나 또는 수정 하나만 담습니다.
-4. PR을 열기 전에 lint, 타입 검사, 테스트, 빌드를 모두 통과시킵니다.
+4. PR을 열기 전에 [PR을 열기 전에](#pr을-열기-전에)의 명령을 모두 통과시킵니다.
 5. Chrome에서 확장을 직접 로드해서 동작을 확인하고, 화면이 바뀌었다면 스크린샷을 PR에 붙입니다.
 
 `main`과 `develop`에 직접 push하지 않습니다.
