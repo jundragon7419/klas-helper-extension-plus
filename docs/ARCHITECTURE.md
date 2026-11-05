@@ -19,11 +19,13 @@ background (service worker)
   └─ 주기 조회와 알림: chrome.alarms, chrome.notifications
         ▲ runtime 메시지
         │
-  ┌─────┴──────────┬────────────────────┬──────────────────────┐
-툴바 아이콘 배지   사이드 패널          content script          MAIN world 스크립트
-미제출 개수        마감 대시보드        KLAS 화면에 작은 UI     KLAS 동작을 꼭 바꿔야
-                                       (Shadow DOM)           할 때만, 로직 없이
+  ┌─────┴──────────┬────────────────────┐
+툴바 아이콘 배지   사이드 패널          (선택) content script, MAIN world 스크립트
+미제출 개수        남은 마감 목록       기본 구성에는 없다. 필요한 기능이 생길 때만 추가한다.
+                  아이콘을 누르면 열림
 ```
+
+화면을 이렇게 나눈 이유는 아래 "화면" 절에 있다. content script는 KLAS 화면에 UI를 넣어야 할 때 Shadow DOM 안에 그리고, MAIN world 스크립트는 KLAS 동작을 꼭 바꿔야 할 때만 로직 없이 둔다.
 
 ### 원칙
 

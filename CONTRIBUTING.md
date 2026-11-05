@@ -6,7 +6,7 @@
 
 - Node.js: `.nvmrc`에 적힌 버전을 씁니다. `nvm use` 또는 `fnm use`로 맞춰 주세요.
 - 에디터: Visual Studio Code를 권장합니다.
-- 브라우저: Chrome 최신 버전에서 먼저 확인합니다. Firefox 지원은 별도로 확인합니다.
+- 브라우저: Chrome 계열(Chrome, Edge) 최신 버전에서 먼저 확인합니다. Firefox 지원은 별도로 확인합니다.
 
 ### 처음 설치
 
@@ -25,11 +25,15 @@ npm run dev:firefox  # Firefox
 
 확장이 로드된 브라우저 창이 새로 열리고, 코드를 저장하면 확장이 자동으로 다시 로드됩니다. 이 창은 평소에 쓰는 브라우저와 다른 프로필이라, KLAS에는 이 창에서 따로 로그인해야 합니다.
 
+`npm run dev`는 Chrome을 찾아서 창을 띄웁니다. Chrome이 설치되어 있지 않으면 창이 열리지 않습니다. 이때는 `npm run dev`를 켜 둔 채로, 아래 "직접 로드하기"의 방법으로 `.output/chrome-mv3-dev/` 폴더를 Edge에 로드하면 됩니다. 코드를 저장하면 이 폴더가 다시 빌드되고 확장도 자동으로 다시 로드됩니다. 터미널에 나오는 `http://localhost:3000`은 개발 서버 주소라서 브라우저에서 열어도 404가 나는 것이 정상입니다.
+
 ### 직접 로드하기
 
-1. `npm run build`로 빌드합니다. 결과는 `.output/chrome-mv3/`에 생깁니다.
-2. Chrome 주소창에 `chrome://extensions`를 입력하고 오른쪽 위 **개발자 모드**를 켭니다.
-3. **압축해제된 확장 프로그램을 로드합니다**를 누르고 `.output/chrome-mv3/` 폴더를 고릅니다.
+1. `npm run build`로 빌드합니다. 결과는 `.output/chrome-mv3/`에 생깁니다. `npm run dev`를 켜 둔 상태라면 `.output/chrome-mv3-dev/`를 씁니다.
+2. 확장 관리 페이지를 열고 개발자 모드를 켭니다.
+   - Chrome: 주소창에 `chrome://extensions`, 오른쪽 위 **개발자 모드**
+   - Edge: 주소창에 `edge://extensions`, 왼쪽 **개발자 모드**
+3. Chrome은 **압축해제된 확장 프로그램을 로드합니다**, Edge는 **압축 풀린 항목 로드**를 누르고 1번의 폴더를 고릅니다.
 
 ### 명령 목록
 
@@ -58,6 +62,7 @@ npm run format:check
 npm test
 npm run typecheck
 npm run build
+npm run build:firefox
 ```
 
 형식 검사가 실패하면 `npm run format`으로 고친 뒤 다시 커밋하면 됩니다. Prettier는 코드와 설정 파일에만 적용하고 마크다운 문서에는 적용하지 않습니다.
@@ -70,7 +75,7 @@ VS Code를 쓰면 저장소를 열 때 ESLint와 Prettier 확장 설치를 권�
 2. 저장소를 fork하고 `develop`에서 브랜치를 만듭니다. 브랜치 이름은 아래 [브랜치](#브랜치) 절을 따릅니다.
 3. PR은 `develop`으로 보냅니다. PR 하나에는 기능 하나 또는 수정 하나만 담습니다.
 4. PR을 열기 전에 [PR을 열기 전에](#pr을-열기-전에)의 명령을 모두 통과시킵니다.
-5. Chrome에서 확장을 직접 로드해서 동작을 확인하고, 화면이 바뀌었다면 스크린샷을 PR에 붙입니다.
+5. Chrome 계열 브라우저(Chrome, Edge)에서 확장을 직접 로드해서 동작을 확인하고, 화면이 바뀌었다면 스크린샷을 PR에 붙입니다.
 
 `main`과 `develop`에 직접 push하지 않습니다.
 
