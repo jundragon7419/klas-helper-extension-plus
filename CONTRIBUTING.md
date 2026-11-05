@@ -54,7 +54,9 @@ PR은 메인테이너가 "Squash and merge"로 합칩니다. PR 제목이 `devel
 | 🔧 | 설정 파일 |
 | 🚀 | 배포 |
 
-예: `✨ 툴바 아이콘에 미제출 개수 배지 추가`
+메시지는 한국어로 써도 되고 영어로 써도 됩니다.
+
+예: `✨ 툴바 아이콘에 미제출 개수 배지 추가`, `✨ Add unsubmitted count badge to toolbar icon`
 
 ## 기능 범위
 
