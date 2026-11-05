@@ -1,0 +1,21 @@
+import { defineConfig } from 'wxt';
+
+// https://wxt.dev/api/config.html
+export default defineConfig({
+  // Firefox도 Chrome과 같은 Manifest V3로 빌드한다. (WXT 기본값은 Firefox만 MV2)
+  manifestVersion: 3,
+  manifest: ({ browser }) => ({
+    name: 'KLAS Helper Extension Plus',
+    description: '광운대학교 KLAS의 과제, 강의, 팀 프로젝트, 퀴즈 마감을 한곳에서 보고 알림으로 받는 확장',
+    ...(browser === 'firefox' && {
+      browser_specific_settings: {
+        gecko: {
+          // AMO에 처음 올린 뒤에는 바꿀 수 없다.
+          id: 'klas-helper-extension-plus@jundragon7419',
+          // 외부로 보내는 데이터가 없다. PRIVACY.md 참고
+          data_collection_permissions: { required: ['none'] },
+        },
+      },
+    }),
+  }),
+});
