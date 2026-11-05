@@ -8,7 +8,40 @@
 - 에디터: Visual Studio Code를 권장합니다.
 - 브라우저: Chrome 최신 버전에서 먼저 확인합니다. Firefox 지원은 별도로 확인합니다.
 
-개발 서버 실행 방법과 확장 로드 방법은 프로젝트 골격이 만들어지면 여기에 추가합니다.
+### 처음 설치
+
+```shell
+npm install
+```
+
+설치가 끝나면 `wxt prepare`가 자동으로 실행되어 `.wxt/` 폴더에 타입 정보가 만들어집니다. 이 폴더는 저장소에 올리지 않습니다.
+
+### 개발 서버
+
+```shell
+npm run dev          # Chrome
+npm run dev:firefox  # Firefox
+```
+
+확장이 로드된 브라우저 창이 새로 열리고, 코드를 저장하면 확장이 자동으로 다시 로드됩니다. 이 창은 평소에 쓰는 브라우저와 다른 프로필이라, KLAS에는 이 창에서 따로 로그인해야 합니다.
+
+### 직접 로드하기
+
+1. `npm run build`로 빌드합니다. 결과는 `.output/chrome-mv3/`에 생깁니다.
+2. Chrome 주소창에 `chrome://extensions`를 입력하고 오른쪽 위 **개발자 모드**를 켭니다.
+3. **압축해제된 확장 프로그램을 로드합니다**를 누르고 `.output/chrome-mv3/` 폴더를 고릅니다.
+
+### 명령 목록
+
+| 명령 | 하는 일 |
+|---|---|
+| `npm run dev` | Chrome 개발 서버 |
+| `npm run dev:firefox` | Firefox 개발 서버 |
+| `npm run build` | Chrome용 빌드 (`.output/chrome-mv3/`) |
+| `npm run build:firefox` | Firefox용 빌드 (`.output/firefox-mv3/`) |
+| `npm run zip` | Chrome 웹스토어 제출용 zip |
+| `npm run zip:firefox` | Firefox 부가 기능 사이트 제출용 zip |
+| `npm run typecheck` | 타입 검사 |
 
 ## 작업 순서
 
