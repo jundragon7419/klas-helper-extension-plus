@@ -1,0 +1,35 @@
+# 의존성
+node_modules/
+
+# 빌드 결과
+dist/
+.output/
+.wxt/
+*.zip
+*.xpi
+*.crx
+*.pem
+
+# 로그
+*.log
+npm-debug.log*
+
+# 환경 변수
+.env
+.env.*
+!.env.example
+
+# KLAS 실제 응답을 저장해 두는 곳. 실제 학생 데이터라 올리지 않는다.
+# 테스트용 fixture는 익명화해서 tests/fixtures/ 에 둔다.
+local-data/
+
+# 에디터, OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# 테스트 커버리지
+coverage/
