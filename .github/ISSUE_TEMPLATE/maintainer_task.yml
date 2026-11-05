@@ -1,7 +1,7 @@
 name: 작업 (메인테이너)
 description: 메인테이너가 계획한 작업을 정해진 형식으로 올립니다. 버그 제보와 기능 제안은 다른 양식을 써 주세요.
-title: "[작업] "
-labels: ["task"]
+title: '[작업] '
+labels: ['task']
 body:
   - type: markdown
     attributes:
@@ -76,7 +76,7 @@ body:
     attributes:
       label: 선행 이슈
       description: 이 작업 전에 끝나야 하는 이슈가 있으면 적어 주세요.
-      placeholder: "#2, #5"
+      placeholder: '#2, #5'
 
   - type: textarea
     id: out-of-scope

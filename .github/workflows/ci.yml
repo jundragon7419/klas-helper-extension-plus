@@ -35,6 +35,10 @@ jobs:
         if: steps.pkg.outputs.exists == 'true'
         run: npm run lint --if-present
 
+      - name: 포맷 검사
+        if: steps.pkg.outputs.exists == 'true'
+        run: npm run format:check --if-present
+
       - name: 타입 검사
         if: steps.pkg.outputs.exists == 'true'
         run: npm run typecheck --if-present
