@@ -91,7 +91,10 @@ Preact를 고른 이유:
 
 - KLAS의 axios나 Vue 없이 `fetch`만으로 아래 API를 조회할 수 있다. CSRF 토큰이나 별도 헤더는 필요 없다.
 - 확장 페이지, background(service worker), content script(격리 world) 세 곳 모두에서 로그인 쿠키가 실리고 같은 결과가 나왔다.
-- Firefox는 아직 확인하지 않았다.
+- Firefox 159에서도 content script의 기본 `fetch`로 같은 결과가 나왔다. 로그인 쿠키가 실리고 JSON이 온다. 향상된 추적 방지를 "표준"과 "엄격"으로 둔 경우 모두 같았다. Chrome과 같은 코드를 쓴다. (2026-11-06, 임시 부가 기능으로 확인, #17)
+  - Firefox 전용이던 `content.fetch`는 Firefox 159에 없다.
+  - 페이지 world의 `fetch`(`window.wrappedJSObject.fetch`)도 동작한다. 기본 `fetch`가 막힐 때의 예비 수단이다.
+  - 임시 부가 기능으로 올렸을 때 `klas.kw.ac.kr` 사이트 권한은 처음부터 허용되어 있었다.
 - KLAS의 기본 세션 시간은 2시간(7200초)이다. 아무것도 하지 않으면 그 뒤에 로그아웃된다. 서버 값으로 확인했다. (2026-11-06, #16)
 - 원래 KLAS Helper는 사이트를 다시 불러오거나(10분마다) KLAS의 세션 연장 함수를 호출해서(5분마다) 세션을 유지해 왔다. (kw-service/klas-helper-userscript PR #30, 이슈 #99, kw-service/klas-helper-extension PR #17)
 
@@ -163,7 +166,7 @@ API마다 다르다. 확인한 형식:
 
 ## 아직 정하지 않은 것
 
-- Firefox content script의 KLAS 요청과 실제 로드 확인
+- Firefox에서 서명된 부가 기능으로 정식 설치했을 때도 `klas.kw.ac.kr` 사이트 권한이 처음부터 허용되는지 (배포 때 확인)
 - 학기 선택 규칙: 과목 목록의 첫 학기를 현재 학기로 볼 수 있는지 (방학, 수강 신청 기간 포함)
 - KLAS 탭의 폭, 좁은 창에서의 동작, 확장 표시 모양 (디자인)
 - v1.0 기능 범위 (v0.1.0을 써 본 뒤)

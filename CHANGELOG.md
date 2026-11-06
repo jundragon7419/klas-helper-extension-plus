@@ -15,6 +15,7 @@
 - CI에 Firefox 빌드 검사 (#13)
 - 전체 계획 문서 `docs/ROADMAP.md` (#14)
 - 세션 연장 요청 조사 결과와 결정: `UpdateSession.do`로 연장하고 `session/info`로 상태 확인 (#16)
+- Firefox content script의 KLAS 요청 확인 결과: 기본 `fetch`로 동작, 추적 방지 "엄격"에서도 동일 (#17)
 
 ### 변경
 
