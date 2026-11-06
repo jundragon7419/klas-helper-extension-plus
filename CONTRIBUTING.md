@@ -23,9 +23,23 @@ npm run dev          # Chrome
 npm run dev:firefox  # Firefox
 ```
 
-확장이 로드된 브라우저 창이 새로 열리고, 코드를 저장하면 확장이 자동으로 다시 로드됩니다. 이 창은 평소에 쓰는 브라우저와 다른 프로필이라, KLAS에는 이 창에서 따로 로그인해야 합니다.
+확장이 로드된 브라우저 창이 KLAS 첫 화면으로 새로 열리고, 코드를 저장하면 확장이 자동으로 다시 로드됩니다. 터미널에 나오는 `http://localhost:3000`은 개발 서버 주소라서 브라우저에서 열어도 404가 나는 것이 정상입니다.
 
-`npm run dev`는 Chrome을 찾아서 창을 띄웁니다. Chrome이 설치되어 있지 않으면 창이 열리지 않습니다. 이때는 `npm run dev`를 켜 둔 채로, 아래 "직접 로드하기"의 방법으로 `.output/chrome-mv3-dev/` 폴더를 Edge에 로드하면 됩니다. 코드를 저장하면 이 폴더가 다시 빌드되고 확장도 자동으로 다시 로드됩니다. 터미널에 나오는 `http://localhost:3000`은 개발 서버 주소라서 브라우저에서 열어도 404가 나는 것이 정상입니다.
+기본으로는 Chrome을 찾아서 띄우고, 실행할 때마다 새 프로필을 만듭니다. Edge를 쓰거나 개발용 프로필을 유지하려면 개인 설정 파일을 만듭니다.
+
+```shell
+copy web-ext.config.example.ts web-ext.config.ts    # Windows
+cp web-ext.config.example.ts web-ext.config.ts      # macOS, Linux
+```
+
+`web-ext.config.ts`에서 두 값을 자기 환경에 맞게 고칩니다. 이 파일은 git에 올라가지 않습니다. 브라우저 경로가 틀리면 `npm run dev`가 `spawn ... ENOENT` 오류로 멈춥니다.
+
+- `binaries.chrome`: 띄울 브라우저 경로. Edge 경로는 Edge 주소창에 `edge://version`을 입력하면 "실행 파일 경로"에 나옵니다. Chrome을 쓰면 이 항목을 지웁니다.
+- `chromiumProfile`: 개발용 프로필 폴더. 저장소 밖의 고정 경로로 두면 저장한 비밀번호, 설정, 다른 확장이 다음 실행에도 남습니다. 평소에 쓰는 브라우저 프로필과 다른 폴더여야 하고, Windows에서는 절대 경로를 씁니다. 같이 있는 `keepProfileChanges: true`를 지우면 변경 사항이 저장되지 않습니다.
+
+KLAS 로그인 상태는 프로필을 유지해도 남지 않습니다. KLAS 로그인 쿠키는 브라우저를 닫으면 지워지는 세션 쿠키이기 때문입니다. 처음 로그인할 때 Edge에 비밀번호를 저장해 두면 다음부터는 아이디와 비밀번호가 채워진 상태로 열려서 로그인 버튼만 누르면 됩니다.
+
+개인 설정 없이 평소 브라우저를 쓰고 싶다면, `npm run dev`를 켜 둔 채로 아래 "직접 로드하기"의 방법으로 `.output/chrome-mv3-dev/` 폴더를 로드해도 됩니다. 코드를 저장하면 이 폴더가 다시 빌드되고 확장도 자동으로 다시 로드됩니다.
 
 ### 직접 로드하기
 

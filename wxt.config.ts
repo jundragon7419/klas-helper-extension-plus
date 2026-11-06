@@ -2,6 +2,11 @@ import { defineConfig } from 'wxt';
 
 // https://wxt.dev/api/config.html
 export default defineConfig({
+  // npm run dev로 열리는 브라우저 설정. 모두 같이 쓰는 값만 둔다.
+  // 브라우저 경로와 프로필 같은 개인 설정은 web-ext.config.ts에 둔다. (web-ext.config.example.ts 참고)
+  webExt: {
+    startUrls: ['https://klas.kw.ac.kr/'],
+  },
   // Firefox도 Chrome과 같은 Manifest V3로 빌드한다. (WXT 기본값은 Firefox만 MV2)
   manifestVersion: 3,
   manifest: ({ browser }) => ({
