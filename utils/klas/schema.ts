@@ -30,6 +30,8 @@ export interface KlasOnlineRow {
   isonoff?: string;
   /** 강의(`lesson`)에만 있다. 진도율(%) */
   prog?: number;
+  /** 강의 콘텐츠 ID. 검사하지 않고, 항목을 구분하는 데만 쓴다. */
+  oid?: unknown;
 }
 
 /** 과제와 팀 프로젝트 목록의 한 줄 */
@@ -40,6 +42,10 @@ export interface KlasTaskRow {
   /** 추가 제출 기한. 없으면 null */
   reexpiredate: string | null;
   submityn: string;
+  /** 과제 번호. 검사하지 않고, 항목을 구분하는 데만 쓴다. */
+  taskNo?: unknown;
+  /** 순번. 검사하지 않고, 항목을 구분하는 데만 쓴다. */
+  ordseq?: unknown;
 }
 
 /** 퀴즈 목록의 한 줄 */
@@ -48,6 +54,8 @@ export interface KlasQuizRow {
   sdt: string;
   edt: string;
   issubmit: string;
+  /** 퀴즈 번호. 검사하지 않고, 항목을 구분하는 데만 쓴다. */
+  papernum?: unknown;
 }
 
 type Check = (value: unknown) => boolean;
