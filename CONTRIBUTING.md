@@ -51,6 +51,7 @@ npm run dev:firefox  # Firefox
 | `npm run format:check` | 코드 형식 검사 (고치지 않음) |
 | `npm test` | 테스트 한 번 실행 |
 | `npm run test:watch` | 파일이 바뀔 때마다 테스트 다시 실행 |
+| `npm run fixtures:snippet` | KLAS 응답 수집 스크립트 만들기 (`local-data/klas-fixture-snippet.js`) |
 
 ### PR을 열기 전에
 
@@ -129,7 +130,7 @@ PR은 메인테이너가 "Squash and merge"로 합칩니다. PR 제목이 `devel
 
 ## KLAS 데이터 다루기
 
-- 테스트 fixture에 실제 학생 데이터를 넣지 마세요. 학번, 이름, `userId` 같은 필드는 가짜 값으로 바꿉니다.
+- 테스트 fixture에 실제 학생 데이터를 넣지 마세요. KLAS 응답은 수집 스크립트로 개인정보를 지운 뒤 넣습니다. 방법은 [tests/fixtures/klas/README.md](tests/fixtures/klas/README.md)에 있습니다.
 - 이슈나 PR에 스크린샷을 올릴 때 학번, 이름, 성적은 가려 주세요.
 - KLAS 내부 API는 조회(목록) 요청만 씁니다. 새 API를 쓰게 되면 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)의 API 목록에 추가해 주세요.
 - 새 권한을 manifest에 추가하는 PR은 그 권한이 왜 필요한지 설명해 주세요.

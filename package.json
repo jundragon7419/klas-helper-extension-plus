@@ -17,6 +17,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "fixtures:snippet": "node scripts/fixtures/build-snippet.ts",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
