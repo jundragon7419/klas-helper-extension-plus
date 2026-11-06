@@ -1,8 +1,9 @@
-// 마감 조회 결과의 캐시와 조회권.
+// 마감 조회 결과의 캐시 (storage.local). 마지막으로 성공한 결과와 마지막 실패를 담고,
+// 브라우저를 껐다 켜도 남는다. content script와 background가 함께 쓴다.
 //
-// - 캐시(storage.local): 마지막으로 성공한 결과와 마지막 실패. 브라우저를 껐다 켜도 남는다.
-// - 조회권(storage.session): 지금 어느 KLAS 탭이 조회 중인지. service worker가 다시 시작돼도
-//   남고, 브라우저를 끄면 사라진다.
+// 이 파일은 content script도 불러오므로 storage.session 항목을 두지 않는다.
+// WXT의 defineItem은 정의하는 순간 값을 읽는데, content script는 storage.session에
+// 접근할 수 없어서 오류가 난다. 세션 항목은 background 전용 파일에 둔다.
 
 import type { KlasError } from './klas/api';
 import type { CollectOutcome, DeadlineSnapshot } from './klas/collect-deadlines';
@@ -23,21 +24,11 @@ export interface DeadlineCache {
   lastError: (KlasError & { at: number }) | null;
 }
 
-export interface FetchLease {
-  tabId: number;
-  leaseId: string;
-  expiresAt: number;
-}
-
 export const EMPTY_CACHE: DeadlineCache = { snapshot: null, lastError: null };
 
 export const deadlineCache = storage.defineItem<DeadlineCache>('local:deadlineCache', {
   fallback: EMPTY_CACHE,
   version: 1,
-});
-
-export const fetchLease = storage.defineItem<FetchLease | null>('session:fetchLease', {
-  fallback: null,
 });
 
 /** 조회 결과를 캐시에 반영한다. 실패하면 이전 결과를 그대로 두고 실패만 기록한다. */

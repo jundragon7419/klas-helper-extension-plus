@@ -37,3 +37,4 @@
 
 - CI가 `package.json`이나 검사 스크립트가 없을 때 검사를 건너뛰고 통과하던 문제 (#13)
 - `formatRemaining`이 숫자가 아닌 값을 받으면 "NaN일 NaN시간"을 돌려주던 문제. 이제 "알 수 없음" (#20)
+- content script가 storage.session 항목을 불러와 "Access to storage is not allowed from this context" 오류를 내던 문제. background가 아직 준비되지 않았을 때 content script가 멈추던 문제 (#36)

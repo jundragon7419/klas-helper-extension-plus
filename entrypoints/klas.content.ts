@@ -7,8 +7,10 @@ import type { FetchDecision } from '@/utils/fetch-coordinator';
 import { extendSession } from '@/utils/klas/api';
 import { collectDeadlines } from '@/utils/klas/collect-deadlines';
 import { isTabMessage, type ExtensionMessage } from '@/utils/messages';
+import { withReceiverRetry } from '@/utils/send-message';
 
-const send = (message: ExtensionMessage) => browser.runtime.sendMessage(message);
+const send = (message: ExtensionMessage) =>
+  withReceiverRetry(() => browser.runtime.sendMessage(message));
 
 /** background에 묻고, 이 탭이 조회할 차례면 조회해서 결과를 알린다. */
 async function refreshDeadlines(force = false): Promise<FetchDecision> {
@@ -35,7 +37,6 @@ export default defineContentScript({
     };
     browser.runtime.onMessage.addListener(onMessage);
     ctx.onInvalidated(() => browser.runtime.onMessage.removeListener(onMessage));
-    await send({ type: 'klas/opened' });
 
     if (import.meta.env.DEV) {
       // 개발 빌드에서는 캐시가 바뀔 때마다 요약을 콘솔에 남긴다. 다른 탭이 조회한 결과도 보인다.
@@ -52,7 +53,13 @@ export default defineContentScript({
       ctx.onInvalidated(unwatch);
     }
 
-    const decision = await refreshDeadlines();
-    if (import.meta.env.DEV) console.info('[KLAS Helper Plus] 조회 결정', decision.action);
+    // background와 연결되지 않아도 KLAS 페이지에는 영향이 없게, 오류를 남기고 끝낸다.
+    try {
+      await send({ type: 'klas/opened' });
+      const decision = await refreshDeadlines();
+      if (import.meta.env.DEV) console.info('[KLAS Helper Plus] 조회 결정', decision.action);
+    } catch (error) {
+      console.warn('[KLAS Helper Plus] background와 연결하지 못했습니다.', error);
+    }
   },
 });
