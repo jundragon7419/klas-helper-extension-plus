@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   fetchOnlineRows,
   fetchProjects,
@@ -9,8 +9,8 @@ import {
   klasPost,
   type KlasResult,
 } from '@/utils/klas/api';
-import { runSelfCheck } from '@/utils/klas/self-check';
 import fixture from './fixtures/klas/2026-2.json';
+import { fixtureFetch, json, respond } from './helpers/klas-fetch';
 
 type Lists = Record<string, Record<'online' | 'task' | 'project' | 'quiz', unknown[]>>;
 const lists = fixture.lists as Lists;
@@ -18,45 +18,6 @@ const semester = fixture.semester;
 /** 네 종류 목록이 모두 들어 있는 과목을 고른다. */
 const subjectWith = (kind: keyof Lists[string]) =>
   Object.keys(lists).find((code) => (lists[code]?.[kind].length ?? 0) > 0)!;
-
-const LOGIN_URL = 'https://klas.kw.ac.kr/usr/cmn/login/LoginForm.do';
-
-/** fetch가 돌려줄 응답을 만든다. Response.url은 생성자로 정할 수 없어 따로 넣는다. */
-function respond(body: string, init: { status?: number; contentType?: string; url?: string } = {}) {
-  const response = new Response(body, {
-    status: init.status ?? 200,
-    headers: init.contentType === undefined ? {} : { 'content-type': init.contentType },
-  });
-  Object.defineProperty(response, 'url', { value: init.url ?? 'https://klas.kw.ac.kr/x.do' });
-  return response;
-}
-
-const json = (data: unknown) =>
-  respond(JSON.stringify(data), { contentType: 'application/json;charset=UTF-8' });
-
-/** 경로별로 fixture 응답을 돌려주는 가짜 fetch */
-function fixtureFetch() {
-  return vi.fn((url: string, init?: RequestInit) => {
-    const path = new URL(url).pathname;
-    const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as {
-      selectSubj?: string;
-    };
-    const entry = body.selectSubj ? lists[body.selectSubj] : undefined;
-    const data =
-      path === KLAS_PATHS.semesters
-        ? fixture.subjects
-        : path === KLAS_PATHS.online
-          ? entry?.online
-          : path === KLAS_PATHS.task
-            ? entry?.task
-            : path === KLAS_PATHS.project
-              ? entry?.project
-              : path === KLAS_PATHS.quiz
-                ? entry?.quiz
-                : undefined;
-    return Promise.resolve(json(data ?? []));
-  });
-}
 
 function expectError<T>(result: KlasResult<T>, kind: string) {
   expect(result.ok).toBe(false);
@@ -212,26 +173,5 @@ describe('KLAS API: 실패 종류', () => {
     it('빈 배열은 성공이다 (마감이 없는 과목)', async () => {
       expect(await fetchQuizzes(query, withData([]))).toEqual({ ok: true, data: [] });
     });
-  });
-});
-
-describe('runSelfCheck', () => {
-  it('과목 목록과 첫 과목의 네 목록을 불러 개수만 돌려준다', async () => {
-    const fetch = fixtureFetch();
-    const lines = await runSelfCheck({ fetch });
-    expect(fetch).toHaveBeenCalledTimes(5);
-    expect(lines.map((l) => l.api)).toEqual(['semesters', 'online', 'task', 'project', 'quiz']);
-    expect(lines.every((l) => typeof l.result === 'number')).toBe(true);
-  });
-
-  it('과목 목록이 실패하면 거기서 멈춘다', async () => {
-    const fetch = vi.fn(() =>
-      Promise.resolve(respond('<html></html>', { contentType: 'text/html', url: LOGIN_URL })),
-    );
-    const lines = await runSelfCheck({ fetch });
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(lines).toEqual([
-      { api: 'semesters', result: 'session', detail: '로그인 페이지로 이동됨' },
-    ]);
   });
 });

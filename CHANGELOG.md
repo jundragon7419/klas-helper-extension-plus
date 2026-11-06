@@ -21,6 +21,7 @@
 - KLAS 날짜 문자열을 PC 시간대와 관계없이 한국 시간으로 해석하는 `parseKlasDate` (#20)
 - KLAS API 조회 함수 다섯 개와 응답 검사. 실패를 세션 만료, 네트워크, JSON 아님, 형식 바뀜으로 구분. KLAS 페이지 content script 추가 (개발 빌드에서만 API 확인 실행) (#21)
 - 네 종류 목록을 하나의 마감 형식으로 정리하는 `normalizeSubject`와 마감 순 정렬, 한국 날짜로 조회할 학기를 고르는 `pickCurrentSemester` (#22)
+- 여러 KLAS 탭 중 한 곳만 마감을 조회하는 background 조정과 `storage.local` 캐시. 5분 안의 결과는 다시 쓰고, 실패해도 이전 결과를 유지. `storage` 권한 추가 (#23)
 
 ### 변경
 
