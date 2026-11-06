@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRemaining } from '@/utils/format';
+import { formatRemaining, UNKNOWN_REMAINING } from '@/utils/format';
 
 const HOUR = 3_600_000;
 
@@ -18,5 +18,11 @@ describe('formatRemaining', () => {
 
   it('이미 지난 시간은 0분으로 표시한다', () => {
     expect(formatRemaining(-1000)).toBe('0분');
+  });
+
+  it('숫자가 아니거나 무한대면 "알 수 없음"으로 표시한다', () => {
+    expect(formatRemaining(Number.NaN)).toBe(UNKNOWN_REMAINING);
+    expect(formatRemaining(Number.POSITIVE_INFINITY)).toBe(UNKNOWN_REMAINING);
+    expect(formatRemaining(Number.NEGATIVE_INFINITY)).toBe(UNKNOWN_REMAINING);
   });
 });
