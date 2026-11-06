@@ -10,14 +10,26 @@
 import {
   applyOutcome,
   deadlineCache,
-  fetchLease,
   isFresh,
   LEASE_MS,
   type DeadlineCache,
-  type FetchLease,
 } from './deadline-cache';
 import type { KlasError } from './klas/api';
 import type { CollectOutcome } from './klas/collect-deadlines';
+
+export interface FetchLease {
+  tabId: number;
+  leaseId: string;
+  expiresAt: number;
+}
+
+/**
+ * 지금 어느 KLAS 탭이 조회 중인지 (storage.session). service worker가 다시 시작돼도 남고,
+ * 브라우저를 끄면 사라진다. background에서만 쓴다. content script는 storage.session에 접근할 수 없다.
+ */
+export const fetchLease = storage.defineItem<FetchLease | null>('session:fetchLease', {
+  fallback: null,
+});
 
 export type FetchDecision =
   { action: 'fetch'; leaseId: string } | { action: 'use-cache' } | { action: 'wait' };

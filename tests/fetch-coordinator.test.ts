@@ -5,13 +5,12 @@ import {
   deadlineCache,
   EMPTY_CACHE,
   FRESH_FOR_MS,
-  fetchLease,
   isFresh,
   LEASE_MS,
   RETRY_AFTER_FAILURE_MS,
   type DeadlineCache,
 } from '@/utils/deadline-cache';
-import { createFetchCoordinator, decide } from '@/utils/fetch-coordinator';
+import { createFetchCoordinator, decide, fetchLease } from '@/utils/fetch-coordinator';
 import type { KlasError } from '@/utils/klas/api';
 import type { CollectOutcome, DeadlineSnapshot } from '@/utils/klas/collect-deadlines';
 
