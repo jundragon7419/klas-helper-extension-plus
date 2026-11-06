@@ -5,7 +5,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['.output/', '.wxt/', 'node_modules/', 'coverage/'] },
+  { ignores: ['.output/', '.wxt/', 'node_modules/', 'coverage/', 'local-data/'] },
   eslint.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
   {
