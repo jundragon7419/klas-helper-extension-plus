@@ -14,6 +14,7 @@
 - 화면 방식과 UI 프레임워크 결정 기록: 툴바 배지와 사이드 패널, Preact (#11)
 - CI에 Firefox 빌드 검사 (#13)
 - 전체 계획 문서 `docs/ROADMAP.md` (#14)
+- 세션 연장 요청 조사 결과와 결정: `UpdateSession.do`로 연장하고 `session/info`로 상태 확인 (#16)
 
 ### 변경
 

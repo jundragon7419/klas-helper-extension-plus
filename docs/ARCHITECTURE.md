@@ -92,8 +92,8 @@ Preact를 고른 이유:
 - KLAS의 axios나 Vue 없이 `fetch`만으로 아래 API를 조회할 수 있다. CSRF 토큰이나 별도 헤더는 필요 없다.
 - 확장 페이지, background(service worker), content script(격리 world) 세 곳 모두에서 로그인 쿠키가 실리고 같은 결과가 나왔다.
 - Firefox는 아직 확인하지 않았다.
-- KLAS의 기본 세션 시간은 2시간이다. 아무것도 하지 않으면 그 뒤에 로그아웃된다. (메인테이너 확인, 2026-11-06)
-- 원래 KLAS Helper는 사이트를 다시 불러오거나(10분마다) KLAS의 세션 연장 함수를 호출해서(5분마다) 세션을 유지해 왔다. 사이트를 불러오는 것만으로 세션이 유지된다는 관찰이 있다. (kw-service/klas-helper-userscript PR #30, 이슈 #99, kw-service/klas-helper-extension PR #17)
+- KLAS의 기본 세션 시간은 2시간(7200초)이다. 아무것도 하지 않으면 그 뒤에 로그아웃된다. 서버 값으로 확인했다. (2026-11-06, #16)
+- 원래 KLAS Helper는 사이트를 다시 불러오거나(10분마다) KLAS의 세션 연장 함수를 호출해서(5분마다) 세션을 유지해 왔다. (kw-service/klas-helper-userscript PR #30, 이슈 #99, kw-service/klas-helper-extension PR #17)
 
 ## KLAS 내부 API
 
@@ -122,6 +122,26 @@ Preact를 고른 이유:
 - **잘못된 요청에도 빈 배열이 온다.** 과목 코드 필드를 잘못 넣어도 에러 없이 `[]`가 온다. 응답 스키마 검사와 테스트로 막는다.
 - **과목 코드는 `subj`가 아니라 `value` 필드다.**
 
+### 세션 (2026-11-06, Edge, #16)
+
+KLAS 화면의 남은 시간 표시는 서버의 `GET /api/v1/session/info`에서 값을 받는다. 응답 예: `{"remainingTime": 7126, "sessionNotiSec": 6826, "logoutCountDownSec": 300}`. 남은 시간이 300초가 되면 화면에 연장 안내가 뜨고, 0이 되면 페이지가 `/usr/cmn/login/Logout.do`를 호출한다. 화면은 30초마다 `session/info`를 다시 읽어 서버 값과 10초 넘게 차이 나면 표시를 고친다.
+
+요청마다 `session/info`의 `remainingTime`을 앞뒤로 읽어 비교했다.
+
+| 요청 | 남은 시간 | 응답 |
+|---|---|---|
+| `GET /api/v1/session/info` | 그대로 줄어듦 (46초 뒤 46초 감소) | JSON |
+| `POST /std/cmn/frame/YearhakgiAtnlcSbjectList.do` | 7200으로 되돌아감 | JSON |
+| `GET /` | 7200으로 되돌아감 | `Frame.do`로 이동, HTML 약 82 KB |
+| `GET /usr/cmn/login/UpdateSession.do` | 7200으로 되돌아감 | JSON `{}` (2 B) |
+
+결정:
+
+- 세션 연장에는 `GET /usr/cmn/login/UpdateSession.do`를 쓴다. KLAS 화면의 연장 버튼이 부르는 요청이고, 응답이 가장 작고, 정보를 읽거나 바꾸지 않는다.
+- 세션 상태 확인에는 `GET /api/v1/session/info`를 쓴다. 세션을 연장하지 않으므로, 연장이 꺼져 있을 때도 남은 시간을 읽을 수 있다.
+- 일반 API 조회도 세션을 연장한다. 조회 직후에는 따로 연장 요청을 보내지 않아도 된다.
+- KLAS 페이지의 세션 연장 함수(`sessionExtensionReq1` 등)는 부르지 않고 요청을 직접 보낸다. 원래 KLAS Helper는 이 함수를 불렀는데, KLAS가 함수 이름을 바꾸자 페이지 스크립트를 뒤져 찾는 방식으로 대응해야 했다 (kw-service/klas-helper-extension PR #17).
+
 ### 날짜 형식
 
 API마다 다르다. 확인한 형식:
@@ -143,7 +163,6 @@ API마다 다르다. 확인한 형식:
 
 ## 아직 정하지 않은 것
 
-- 세션을 연장하는 요청의 종류: 사이트 다시 불러오기(`/`), KLAS의 세션 연장 요청(`UpdateSession.do`), 일반 API 조회 중 무엇이 남은 시간을 되돌리는지
 - Firefox content script의 KLAS 요청과 실제 로드 확인
 - 학기 선택 규칙: 과목 목록의 첫 학기를 현재 학기로 볼 수 있는지 (방학, 수강 신청 기간 포함)
 - KLAS 탭의 폭, 좁은 창에서의 동작, 확장 표시 모양 (디자인)
