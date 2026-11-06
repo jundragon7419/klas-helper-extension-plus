@@ -125,6 +125,19 @@ Preact를 고른 이유:
 - **잘못된 요청에도 빈 배열이 온다.** 과목 코드 필드를 잘못 넣어도 에러 없이 `[]`가 온다. 응답 스키마 검사와 테스트로 막는다.
 - **과목 코드는 `subj`가 아니라 `value` 필드다.**
 
+### 조회 코드
+
+`utils/klas/api.ts`가 다섯 API를 부르고 `utils/klas/schema.ts`가 응답을 검사한다. 결과는 성공 또는 실패이고, 실패는 네 종류로 나눈다.
+
+| 종류 | 뜻 | 판단 |
+|---|---|---|
+| `session` | 로그인이 끊김 | 응답 주소가 `/usr/cmn/login/` 아래 (로그인 페이지로 이동) |
+| `network` | 요청 실패 | 요청 예외, 시간 초과(15초), HTTP 오류 |
+| `not-json` | 알 수 없는 응답 | 로그인 페이지가 아니고 `content-type`이 JSON이 아니거나 JSON을 읽을 수 없음 |
+| `schema` | KLAS 형식 바뀜 | JSON이지만 쓰는 필드가 없거나 형식이 다름 |
+
+응답 검사는 확장이 쓰는 필드만 확인한다. 필드가 더해지는 것은 괜찮다. 온라인 강의 목록에는 강의(`evltnSe: "lesson"`)와 퀴즈(`"quiz"`)가 섞여 오고, 퀴즈 줄에는 `isonoff`, `prog`가 없다.
+
 ### 세션 (2026-11-06, Edge, #16)
 
 KLAS 화면의 남은 시간 표시는 서버의 `GET /api/v1/session/info`에서 값을 받는다. 응답 예: `{"remainingTime": 7126, "sessionNotiSec": 6826, "logoutCountDownSec": 300}`. 남은 시간이 300초가 되면 화면에 연장 안내가 뜨고, 0이 되면 페이지가 `/usr/cmn/login/Logout.do`를 호출한다. 화면은 30초마다 `session/info`를 다시 읽어 서버 값과 10초 넘게 차이 나면 표시를 고친다.
