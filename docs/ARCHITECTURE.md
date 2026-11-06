@@ -131,7 +131,7 @@ Preact를 고른 이유:
 
 | 종류 | 뜻 | 판단 |
 |---|---|---|
-| `session` | 로그인이 끊김 | 응답 주소가 `/usr/cmn/login/` 아래 (로그인 페이지로 이동) |
+| `session` | 로그인이 끊김 | 응답 주소가 `/usr/cmn/login/LoginForm.do` (로그인 페이지로 이동). `UpdateSession.do`도 `/usr/cmn/login/` 아래에 있으므로 경로 전체로 판단하지 않는다 |
 | `network` | 요청 실패 | 요청 예외, 시간 초과(15초), HTTP 오류 |
 | `not-json` | 알 수 없는 응답 | 로그인 페이지가 아니고 `content-type`이 JSON이 아니거나 JSON을 읽을 수 없음 |
 | `schema` | KLAS 형식 바뀜 | JSON이지만 쓰는 필드가 없거나 형식이 다름 |
@@ -175,6 +175,32 @@ KLAS 화면의 남은 시간 표시는 서버의 `GET /api/v1/session/info`에�
 - 세션 상태 확인에는 `GET /api/v1/session/info`를 쓴다. 세션을 연장하지 않으므로, 연장이 꺼져 있을 때도 남은 시간을 읽을 수 있다.
 - 일반 API 조회도 세션을 연장한다. 조회 직후에는 따로 연장 요청을 보내지 않아도 된다.
 - KLAS 페이지의 세션 연장 함수(`sessionExtensionReq1` 등)는 부르지 않고 요청을 직접 보낸다. 원래 KLAS Helper는 이 함수를 불렀는데, KLAS가 함수 이름을 바꾸자 페이지 스크립트를 뒤져 찾는 방식으로 대응해야 했다 (kw-service/klas-helper-extension PR #17).
+
+### 세션 연장 (#24)
+
+로그인하지 않은 상태에서 확인한 응답 (2026-11-06, 로그인 쿠키 없이 요청):
+
+| 요청 | 응답 |
+|---|---|
+| `GET /usr/cmn/login/UpdateSession.do` | 200, JSON `{}`. 로그인했을 때와 같아서 이것만으로는 만료를 알 수 없다 |
+| `GET /api/v1/session/info` | 500, HTML |
+| `POST` 과목 목록 | 200, `LoginForm.do`로 이동 |
+
+연장 순서 (`utils/klas/api.ts`의 `extendSession`):
+
+1. `UpdateSession.do`로 연장한다.
+2. `session/info`로 남은 시간을 읽는다. 남은 시간이 있으면 연장된 것이다.
+3. 2가 실패했을 때만 과목 목록으로 확인한다. 로그인 페이지로 넘어가면 세션 만료다.
+
+평소 요청은 10분마다 두 번(1, 2)이다.
+
+연장 시점 (`utils/session-keeper.ts`, background):
+
+- KLAS 학생 페이지의 content script가 열렸다고 알리면 그 탭을 `storage.session`의 `klasTabs`에 넣는다. `tabs` 권한 없이 KLAS 탭을 알기 위해서다.
+- 첫 탭이 등록되면 10분 주기 알람(`session-keepalive`)을 만든다. 이미 있으면 다시 만들지 않는다. service worker가 깨어날 때마다 새로 만들면 주기가 처음부터 다시 시작되어 알람이 울리지 않을 수 있다.
+- 알람이 울리면 설정(`sessionKeepAlive`, 기본 켜짐)을 보고, 등록된 탭 하나에 연장을 맡긴다. 그 탭의 content script가 같은 출처로 요청한다.
+- 답하지 않는 탭(닫혔거나 KLAS를 벗어남)은 목록에서 빼고 다음 탭에 맡긴다. 탭이 하나도 남지 않으면 알람을 지운다.
+- 연장 결과가 세션 만료면 마감 캐시에 "로그인 필요"를 기록한다. 이전 마감 결과는 남긴다.
 
 ### 날짜 형식
 
