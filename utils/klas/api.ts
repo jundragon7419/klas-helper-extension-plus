@@ -21,6 +21,10 @@ export const KLAS_PATHS = {
   task: '/std/lis/evltn/TaskStdList.do',
   project: '/std/lis/evltn/PrjctStdList.do',
   quiz: '/std/lis/evltn/AnytmQuizStdList.do',
+  /** 세션 연장. GET이고 응답은 로그인 여부와 관계없이 `{}` */
+  updateSession: '/usr/cmn/login/UpdateSession.do',
+  /** 남은 세션 시간. GET. 세션을 연장하지 않는다. 로그인하지 않았으면 HTTP 500 */
+  sessionInfo: '/api/v1/session/info',
 } as const;
 
 /**
@@ -56,9 +60,12 @@ export interface KlasRequestOptions {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
-/** 로그인 페이지로 넘어간 응답인지 본다. KLAS는 세션이 끊겨도 HTTP 200과 로그인 페이지를 준다. */
+/**
+ * 로그인 페이지로 넘어간 응답인지 본다. KLAS는 세션이 끊기면 HTTP 200과 로그인 페이지(LoginForm.do)를 준다.
+ * UpdateSession.do도 /usr/cmn/login/ 아래에 있으므로 경로 전체가 아니라 LoginForm.do로 판단한다.
+ */
 function isLoginPage(response: Response): boolean {
-  return /\/usr\/cmn\/login\//i.test(response.url);
+  return /\/usr\/cmn\/login\/LoginForm\.do/i.test(response.url);
 }
 
 function fail(kind: KlasErrorKind, path: string, message: string): KlasResult<never> {
@@ -66,10 +73,26 @@ function fail(kind: KlasErrorKind, path: string, message: string): KlasResult<ne
 }
 
 /** KLAS API에 JSON 본문으로 POST하고, 응답을 JSON으로 읽는다. 응답 검사는 하지 않는다. */
-export async function klasPost(
+export function klasPost(
   path: string,
   body: unknown,
   options: KlasRequestOptions = {},
+): Promise<KlasResult<unknown>> {
+  return klasRequest(path, { method: 'POST', body: JSON.stringify(body) }, options);
+}
+
+/** KLAS API에 GET으로 요청하고, 응답을 JSON으로 읽는다. 응답 검사는 하지 않는다. */
+export function klasGet(
+  path: string,
+  options: KlasRequestOptions = {},
+): Promise<KlasResult<unknown>> {
+  return klasRequest(path, { method: 'GET' }, options);
+}
+
+async function klasRequest(
+  path: string,
+  request: { method: 'GET' | 'POST'; body?: string },
+  options: KlasRequestOptions,
 ): Promise<KlasResult<unknown>> {
   const doFetch: FetchLike = options.fetch ?? ((url, init) => fetch(url, init));
   const url = new URL(path, options.origin ?? KLAS_ORIGIN).href;
@@ -77,10 +100,9 @@ export async function klasPost(
   let response: Response;
   try {
     response = await doFetch(url, {
-      method: 'POST',
+      ...request,
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
       signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     });
   } catch (error) {
@@ -167,4 +189,35 @@ export function fetchQuizzes(
   options?: KlasRequestOptions,
 ): Promise<KlasResult<KlasQuizRow[]>> {
   return request(KLAS_PATHS.quiz, subjectBody(query), checkQuizRows, options);
+}
+
+/** 세션 연장 결과 */
+export interface SessionStatus {
+  /** 연장 뒤 남은 세션 시간(초). 남은 시간을 읽지 못했으면 null */
+  remainingSeconds: number | null;
+}
+
+/**
+ * 세션을 연장하고 로그인이 살아 있는지 확인한다. (docs/ARCHITECTURE.md "세션")
+ *
+ * 1. UpdateSession.do로 연장한다. 이 응답은 로그인 여부와 관계없이 `{}`라서 만료를 알 수 없다.
+ * 2. session/info로 남은 시간을 읽는다. 세션을 연장하지 않는 요청이다.
+ * 3. 2가 실패하면 과목 목록으로 확인한다. 로그인이 끊겼으면 로그인 페이지로 넘어가므로 session 실패가 된다.
+ *    실패했을 때만 보내므로 평소에는 요청이 두 번이다.
+ */
+export async function extendSession(
+  options?: KlasRequestOptions,
+): Promise<KlasResult<SessionStatus>> {
+  const update = await klasGet(KLAS_PATHS.updateSession, options);
+  if (!update.ok) return update;
+
+  const info = await klasGet(KLAS_PATHS.sessionInfo, options);
+  if (info.ok) {
+    const seconds = (info.data as { remainingTime?: unknown } | null)?.remainingTime;
+    if (typeof seconds === 'number' && seconds > 0)
+      return { ok: true, data: { remainingSeconds: seconds } };
+  }
+
+  const check = await fetchSemesters(options);
+  return check.ok ? { ok: true, data: { remainingSeconds: null } } : check;
 }

@@ -16,6 +16,7 @@ import {
   type DeadlineCache,
   type FetchLease,
 } from './deadline-cache';
+import type { KlasError } from './klas/api';
 import type { CollectOutcome } from './klas/collect-deadlines';
 
 export type FetchDecision =
@@ -84,6 +85,14 @@ export function createFetchCoordinator(options: CoordinatorOptions = {}) {
         if (current || outcome.ok)
           await deadlineCache.setValue(applyOutcome(cache, outcome, now()));
         if (current) await fetchLease.setValue(null);
+      });
+    },
+
+    /** 조회 밖에서 알게 된 실패를 기록한다. 세션 연장 응답이 세션 만료일 때 쓴다. */
+    recordFailure(error: KlasError): Promise<void> {
+      return serial(async () => {
+        const cache = await deadlineCache.getValue();
+        await deadlineCache.setValue(applyOutcome(cache, { ok: false, error }, now()));
       });
     },
 
