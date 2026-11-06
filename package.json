@@ -18,6 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "fixtures:snippet": "node scripts/fixtures/build-snippet.ts",
+    "tokens:preview": "vite --config scripts/tokens-preview/vite.config.ts",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
