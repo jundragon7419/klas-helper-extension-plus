@@ -23,6 +23,7 @@
 - 네 종류 목록을 하나의 마감 형식으로 정리하는 `normalizeSubject`와 마감 순 정렬, 한국 날짜로 조회할 학기를 고르는 `pickCurrentSemester` (#22)
 - 여러 KLAS 탭 중 한 곳만 마감을 조회하는 background 조정과 `storage.local` 캐시. 5분 안의 결과는 다시 쓰고, 실패해도 이전 결과를 유지. `storage` 권한 추가 (#23)
 - KLAS 탭이 열려 있는 동안 10분마다 세션 연장. 연장 뒤 남은 시간으로 로그인이 살아 있는지 확인하고, 끊겼으면 마감 캐시에 기록. 설정 값 `sessionKeepAlive`(기본 켜짐), `alarms` 권한 추가 (#24)
+- KLAS 탭 디자인 결정: KLAS 색과 글꼴, "KLAS Helper+" 바와 탭 줄, 폭 360px, 손잡이, 좁은 창. KLAS 안에 넣는 요소는 KLAS 마크업 그대로 두고 (+) 표시만 붙임. 디자인 토큰 `utils/ui/tokens.ts`와 대비 검사 테스트, 값을 바꿔 보고 저장하는 미리보기 페이지 `npm run tokens:preview` (#25)
 
 ### 변경
 
