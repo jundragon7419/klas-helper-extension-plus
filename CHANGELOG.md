@@ -6,6 +6,8 @@
 
 ### 추가
 
+- KLAS 마감 일정 패널에 날짜별 목록, 조회 상태, 다시 확인과 과목별 KLAS 목록 이동을 추가함 (#51)
+
 - KLAS 학생 화면에 손잡이와 마감 일정 패널 프레임을 추가함. 손잡이로 패널을 열고 닫을 수 있음. 상단 닫기 버튼, Esc, 패널 바깥의 KLAS 화면 클릭도 지원하고, 좁은 창에서는 전체 화면으로 표시함 (#49)
 
 - 저장소 초기 구성: LICENSE, README, CONTRIBUTING, SECURITY, PRIVACY 초안, ARCHITECTURE 문서, 이슈와 PR 템플릿, CI 설정

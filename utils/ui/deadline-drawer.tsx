@@ -2,10 +2,14 @@ import { render } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
+import type { RefreshDeps } from '../refresh-deadlines';
 import drawerCss from './deadline-drawer.css?inline';
+import { DeadlinePanel } from './deadline-panel';
+import { useDeadlineList } from './use-deadline-list';
 import { tokens, tokensToCss } from './tokens';
 
-function DeadlineDrawer() {
+function DeadlineDrawer({ ctx, send }: { ctx: ContentScriptContext; send: RefreshDeps['send'] }) {
+  const { cache, checking, check } = useDeadlineList(ctx, send);
   const [open, setOpen] = useState(false);
   const handle = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -23,12 +27,15 @@ function DeadlineDrawer() {
       restoreFocus.current = false;
       handle.current?.focus();
     }
-  }, [open]);
+  }, [open, check]);
 
   useEffect(() => {
     const panel = drawer.current;
     if (!open || !panel) return;
 
+    const onFocus = () => {
+      if (!document.hidden) void check();
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !event.defaultPrevented) close();
     };
@@ -39,13 +46,17 @@ function DeadlineDrawer() {
       }
     };
 
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('click', onClick, true);
     return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('click', onClick, true);
     };
-  }, [open]);
+  }, [open, check]);
 
   return (
     <>
@@ -56,7 +67,14 @@ function DeadlineDrawer() {
         aria-label={open ? '손잡이로 마감 일정 닫기' : '마감 일정 열기'}
         aria-controls="deadline-drawer"
         aria-expanded={open}
-        onClick={open ? close : () => setOpen(true)}
+        onClick={
+          open
+            ? close
+            : () => {
+                void check();
+                setOpen(true);
+              }
+        }
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d={open ? 'm9 6 6 6-6 6' : 'm15 6-6 6 6 6'} />
@@ -95,13 +113,21 @@ function DeadlineDrawer() {
             마감 일정
           </button>
         </div>
-        <div id="deadline-tab-panel" role="tabpanel" aria-labelledby="deadline-tab" />
+        <DeadlinePanel
+          cache={cache}
+          checking={checking}
+          open={open}
+          onRefresh={() => void check(true)}
+        />
       </aside>
     </>
   );
 }
 
-export async function mountDeadlineDrawer(ctx: ContentScriptContext): Promise<void> {
+export async function mountDeadlineDrawer(
+  ctx: ContentScriptContext,
+  send: RefreshDeps['send'],
+): Promise<void> {
   const ui = await createShadowRootUi(ctx, {
     name: 'klas-helper-plus-drawer',
     position: 'inline',
@@ -117,7 +143,7 @@ ${drawerCss}
   }
 }`,
     onMount(container) {
-      render(<DeadlineDrawer />, container);
+      render(<DeadlineDrawer ctx={ctx} send={send} />, container);
       return container;
     },
     onRemove(container) {

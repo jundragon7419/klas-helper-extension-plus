@@ -23,7 +23,12 @@ function unexpectedOutcome(error: unknown): CollectOutcome {
  * background에 묻고, 이 탭이 조회할 차례면 조회해서 결과를 알린다.
  * 조회 함수가 예외를 던져도 실패로 알려서, 조회권을 바로 돌려주고 실패를 캐시에 남긴다.
  */
-export async function refreshDeadlines(deps: RefreshDeps, force = false): Promise<FetchDecision> {
+export type RefreshResult =
+  | Exclude<FetchDecision, { action: 'fetch-uncached' }>
+  | { action: 'fetch-uncached'; outcome: CollectOutcome }
+  | { action: 'account-unverified'; sessionExpired: boolean };
+
+export async function refreshDeadlines(deps: RefreshDeps, force = false): Promise<RefreshResult> {
   const { accountHash } = deps;
   const decision = await deps.send({ type: 'deadlines/request', accountHash, force });
   if (decision === null || typeof decision !== 'object' || !('action' in decision)) {
@@ -31,9 +36,8 @@ export async function refreshDeadlines(deps: RefreshDeps, force = false): Promis
   }
   const { action } = decision;
   if (action === 'use-cache' || action === 'wait') return { action };
-  if (action === 'fetch-uncached') {
-    await deps.collect(deps.now());
-    return { action };
+  if (action === 'fetch-uncached' && accountHash === null) {
+    return { action, outcome: await collectOutcome(deps) };
   }
   if (
     action !== 'fetch' ||
@@ -45,13 +49,22 @@ export async function refreshDeadlines(deps: RefreshDeps, force = false): Promis
   }
   const { leaseId } = decision;
 
-  let outcome: CollectOutcome;
-  try {
-    outcome = await deps.collect(deps.now());
-  } catch (error) {
-    outcome = unexpectedOutcome(error);
-  }
+  const outcome = await collectOutcome(deps);
   const verifiedAccountHash = await deps.readAccountHash();
   await deps.send({ type: 'deadlines/report', leaseId, accountHash, verifiedAccountHash, outcome });
+  if (verifiedAccountHash !== accountHash) {
+    return {
+      action: 'account-unverified',
+      sessionExpired: !outcome.ok && outcome.error.kind === 'session',
+    };
+  }
   return { action, leaseId };
+}
+
+async function collectOutcome(deps: RefreshDeps): Promise<CollectOutcome> {
+  try {
+    return await deps.collect(deps.now());
+  } catch (error) {
+    return unexpectedOutcome(error);
+  }
 }

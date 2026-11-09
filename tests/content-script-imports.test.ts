@@ -5,21 +5,26 @@ import { describe, expect, it } from 'vitest';
 // 접근할 수 없어서 "Access to storage is not allowed from this context" 오류가 난다.
 // 가짜 브라우저(fakeBrowser)에는 이 제한이 없어서, 소스를 직접 읽어 확인한다.
 
-const sources = import.meta.glob<string>(['../entrypoints/**/*.ts', '../utils/**/*.ts'], {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-});
+const sources = import.meta.glob<string>(
+  ['../entrypoints/**/*.{ts,tsx}', '../utils/**/*.{ts,tsx}'],
+  {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  },
+);
 
 /** '../utils/x.ts' 형식의 키로 바꾼다. */
 function resolve(from: string, specifier: string): string | null {
   let path: string;
   if (specifier.startsWith('@/')) path = `../${specifier.slice(2)}`;
   else if (specifier.startsWith('.'))
-    path = new URL(specifier, `file:///root/tests/${from}`).pathname.replace('/root/', '../');
+    path = new URL(specifier, new URL(from, 'file:///root/tests/')).pathname.replace(
+      '/root/',
+      '../',
+    );
   else return null; // 패키지
-  if (!path.endsWith('.ts')) path += '.ts';
-  return path in sources ? path : null;
+  return [path, path + '.ts', path + '.tsx'].find((candidate) => candidate in sources) ?? null;
 }
 
 /** 값으로 불러오는 모듈만 따라간다. `import type`은 빌드에서 사라지므로 뺀다. */
@@ -39,7 +44,7 @@ function contentScriptModules(entry: string): string[] {
     if (seen.has(path)) continue;
     seen.add(path);
     for (const specifier of valueImports(sources[path] ?? '')) {
-      const next = resolve(path.replace('../', ''), specifier);
+      const next = resolve(path, specifier);
       if (next) stack.push(next);
     }
   }
@@ -50,6 +55,7 @@ describe('content script가 불러오는 모듈', () => {
   const modules = contentScriptModules('../entrypoints/klas.content.ts');
 
   it('필요한 모듈을 따라가 찾는다', () => {
+    expect(modules).toContain('../utils/ui/deadline-drawer.tsx');
     expect(modules).toContain('../utils/deadline-cache.ts');
     expect(modules).toContain('../utils/klas/api.ts');
     // 타입으로만 불러오는 모듈은 빠진다.
