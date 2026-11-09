@@ -29,7 +29,7 @@ export interface DeadlineCache {
   fetchScope?: string;
   /** 마지막으로 성공한 결과 */
   snapshot: DeadlineSnapshot | null;
-  /** 마지막 조회가 실패했으면 그 이유. 성공하면 지운다. */
+  /** 마지막 실패 기록. 실패 이후 시작한 조회가 성공하면 지운다. */
   lastError: (KlasError & { at: number }) | null;
 }
 
@@ -46,7 +46,12 @@ export function applyOutcome(
   outcome: CollectOutcome,
   now: number,
 ): DeadlineCache {
-  if (outcome.ok) return { ...cache, snapshot: outcome.snapshot, lastError: null };
+  if (outcome.ok) {
+    const { lastError } = cache;
+    const { snapshot } = outcome;
+    const keepError = lastError !== null && snapshot.checkedAt <= lastError.at;
+    return { ...cache, snapshot, lastError: keepError ? lastError : null };
+  }
   return { ...cache, lastError: { ...outcome.error, at: now } };
 }
 
