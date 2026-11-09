@@ -392,7 +392,8 @@ h2 {
   background: var(--khp-color-surface-hover);
 }
 .s-icon-btn-brand:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: radial-gradient(circle closest-side, var(--khp-color-accent-hover) 97%, transparent)
+    center / 32px 32px no-repeat;
 }
 .s-brand .s-icon-btn svg {
   stroke: var(--khp-color-on-brand);
@@ -492,14 +493,6 @@ h2 {
   background: var(--khp-color-urgent-subtle);
   color: var(--khp-color-urgent);
   font-weight: var(--khp-font-weight-bold);
-}
-.s-foot {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--khp-space-3);
-  padding: var(--khp-space-4) var(--khp-space-5);
-  font-size: var(--khp-font-size-xs);
-  color: var(--khp-color-text-muted);
 }
 
 .s-banner {
