@@ -15,7 +15,7 @@ export default defineConfig({
     permissions: ['storage', 'alarms'],
     name: 'KLAS Helper Extension Plus',
     description:
-      '광운대학교 KLAS의 과제, 강의, 팀 프로젝트, 퀴즈 마감을 한곳에서 보고 알림으로 받는 확장',
+      '광운대학교 KLAS의 과제, 강의, 팀 프로젝트, 퀴즈 마감을 KLAS 화면 안에서 한곳에 모아 보는 확장',
     ...(browser === 'firefox' && {
       browser_specific_settings: {
         gecko: {

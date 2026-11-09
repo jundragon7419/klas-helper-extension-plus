@@ -1,6 +1,6 @@
 {
   "name": "klas-helper-extension-plus",
-  "description": "KLAS 마감을 한곳에서 보고 알림으로 받는 브라우저 확장",
+  "description": "KLAS 화면에서 마감을 한곳에 모아 보는 브라우저 확장",
   "private": true,
   "version": "0.1.0",
   "type": "module",

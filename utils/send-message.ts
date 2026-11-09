@@ -4,6 +4,17 @@
 // "Could not establish connection. Receiving end does not exist." 오류가 난다.
 // 이 경우에만 잠시 기다렸다가 다시 보낸다.
 
+/** background의 처리 실패는 재시도하지 않고 원인을 호출자에게 전달한다. */
+export function readBackgroundReply(reply: unknown): unknown {
+  if (reply !== null && typeof reply === 'object' && 'ok' in reply) {
+    if (reply.ok === true) return 'data' in reply ? reply.data : undefined;
+    if (reply.ok === false && 'message' in reply && typeof reply.message === 'string') {
+      throw new Error(reply.message);
+    }
+  }
+  throw new Error('background 응답 형식이 올바르지 않습니다.');
+}
+
 /** background에 리스너가 없어서 난 오류인지 본다. */
 export function isNoReceiverError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);

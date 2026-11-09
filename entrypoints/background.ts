@@ -55,10 +55,16 @@ export default defineBackground(() => {
     const tabId = sender.tab?.id;
     if (!isExtensionMessage(message) || tabId === undefined) return false;
     // Chrome과 Firefox 모두에서 비동기로 답하려고 sendResponse를 쓰고 true를 돌려준다.
-    handle(message, tabId).then(sendResponse, (error: unknown) => {
-      console.error('[KLAS Helper Plus] message failed', error);
-      sendResponse(undefined);
-    });
+    handle(message, tabId).then(
+      (data) => sendResponse({ ok: true, data }),
+      (error: unknown) => {
+        console.error('[KLAS Helper Plus] message failed', error);
+        sendResponse({
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      },
+    );
     return true;
   });
 

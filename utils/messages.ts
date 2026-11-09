@@ -1,4 +1,4 @@
-// content script와 background가 주고받는 메시지
+// content script와 background가 주고받는 요청 메시지
 
 import type { CollectOutcome } from './klas/collect-deadlines';
 
