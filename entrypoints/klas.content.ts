@@ -5,6 +5,8 @@ import { extendSession } from '@/utils/klas/api';
 import { isTabMessage, type ExtensionMessage } from '@/utils/messages';
 import { readBackgroundReply, withReceiverRetry } from '@/utils/send-message';
 import { mountDeadlineDrawer } from '@/utils/ui/deadline-drawer';
+import { mountSessionIndicator } from '@/utils/ui/session-indicator';
+import '@/utils/ui/session-indicator.css';
 
 const send = async (message: ExtensionMessage) =>
   readBackgroundReply(await withReceiverRetry(() => browser.runtime.sendMessage(message)));
@@ -15,6 +17,10 @@ export default defineContentScript({
   async main(ctx) {
     // 로그인한 학생 페이지에서만 동작한다.
     if (!location.pathname.startsWith('/std/')) return;
+
+    void mountSessionIndicator(ctx).catch((error: unknown) => {
+      console.warn('[KLAS Helper Plus] 자동 연장 표시를 설정하지 못했습니다.', error);
+    });
 
     void mountDeadlineDrawer(ctx, send).catch((error: unknown) => {
       console.warn('[KLAS Helper Plus] 마감 일정 패널을 열지 못했습니다.', error);
