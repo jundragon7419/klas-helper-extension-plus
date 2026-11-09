@@ -367,6 +367,11 @@ h2 {
   cursor: default;
 }
 .s-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--khp-space-2);
   margin: 0;
   padding: var(--khp-space-3) var(--khp-space-5);
   font-size: var(--khp-font-size-sm);
