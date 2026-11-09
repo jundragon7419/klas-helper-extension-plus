@@ -9,6 +9,8 @@ import { SessionSettings } from './session-settings';
 import { useDeadlineList } from './use-deadline-list';
 import { tokens, tokensToCss } from './tokens';
 
+const NARROW_DRAWER_QUERY = `(width < ${tokens.size['narrow-breakpoint']}px)`;
+
 function DeadlineDrawer({ ctx, send }: { ctx: ContentScriptContext; send: RefreshDeps['send'] }) {
   const { cache, checking, check } = useDeadlineList(ctx, send);
   const [open, setOpen] = useState(false);
@@ -34,17 +36,44 @@ function DeadlineDrawer({ ctx, send }: { ctx: ContentScriptContext; send: Refres
   useEffect(() => {
     const panel = drawer.current;
     if (!open || !panel) return;
+    const narrow = window.matchMedia(NARROW_DRAWER_QUERY);
 
     const onFocus = () => {
       if (!document.hidden) void check();
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) close();
+      if (event.defaultPrevented) return;
+      if (event.key === 'Escape') close();
+      if (
+        event.key !== 'Tab' ||
+        !narrow.matches ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey
+      ) {
+        return;
+      }
+
+      const controls = [
+        handle.current,
+        ...panel.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]'),
+      ].filter((control) => control && control.tabIndex >= 0 && control.getClientRects().length);
+      const first = controls[0];
+      const last = controls.at(-1);
+      const active = event.composedPath()[0];
+      const boundary = event.shiftKey ? first : last;
+      const target = event.shiftKey ? last : first;
+
+      if (target && (active === boundary || !controls.some((control) => control === active))) {
+        event.preventDefault();
+        target.focus();
+      }
     };
     const onClick = (event: MouseEvent) => {
       const path = event.composedPath();
       if (!path.includes(panel) && (!handle.current || !path.includes(handle.current))) {
-        setOpen(false);
+        if (narrow.matches) close();
+        else setOpen(false);
       }
     };
 
@@ -148,7 +177,7 @@ export async function mountDeadlineDrawer(
     inheritStyles: true,
     css: `${tokensToCss()}
 ${drawerCss}
-@media (width < ${tokens.size['narrow-breakpoint']}px) {
+@media ${NARROW_DRAWER_QUERY} {
   .drawer { width: 100%; }
   .drawer-handle[aria-expanded='true'] {
     inset-inline-start: 0;
