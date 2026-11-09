@@ -36,3 +36,7 @@ Thumbs.db
 
 # 테스트 커버리지
 coverage/
+
+# Codex 개인 설정과 스킬
+/.codex/
+/.agents/skills/

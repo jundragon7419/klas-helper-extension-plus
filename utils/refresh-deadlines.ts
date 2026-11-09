@@ -22,8 +22,16 @@ function unexpectedOutcome(error: unknown): CollectOutcome {
  * 조회 함수가 예외를 던져도 실패로 알려서, 조회권을 바로 돌려주고 실패를 캐시에 남긴다.
  */
 export async function refreshDeadlines(deps: RefreshDeps, force = false): Promise<FetchDecision> {
-  const decision = (await deps.send({ type: 'deadlines/request', force })) as FetchDecision;
-  if (decision.action !== 'fetch') return decision;
+  const decision = await deps.send({ type: 'deadlines/request', force });
+  if (decision === null || typeof decision !== 'object' || !('action' in decision)) {
+    throw new Error('마감 조회 결정 형식이 올바르지 않습니다.');
+  }
+  const { action } = decision;
+  if (action === 'use-cache' || action === 'wait') return { action };
+  if (action !== 'fetch' || !('leaseId' in decision) || typeof decision.leaseId !== 'string') {
+    throw new Error('마감 조회 결정 형식이 올바르지 않습니다.');
+  }
+  const { leaseId } = decision;
 
   let outcome: CollectOutcome;
   try {
@@ -31,6 +39,6 @@ export async function refreshDeadlines(deps: RefreshDeps, force = false): Promis
   } catch (error) {
     outcome = unexpectedOutcome(error);
   }
-  await deps.send({ type: 'deadlines/report', leaseId: decision.leaseId, outcome });
-  return decision;
+  await deps.send({ type: 'deadlines/report', leaseId, outcome });
+  return { action, leaseId };
 }

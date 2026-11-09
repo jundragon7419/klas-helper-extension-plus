@@ -5,6 +5,7 @@ import { createFetchCoordinator, fetchLease } from '@/utils/fetch-coordinator';
 import type { CollectOutcome } from '@/utils/klas/collect-deadlines';
 import type { ExtensionMessage } from '@/utils/messages';
 import { refreshDeadlines, type RefreshDeps } from '@/utils/refresh-deadlines';
+import { readBackgroundReply } from '@/utils/send-message';
 
 const T0 = 1_800_000_000_000;
 const success: CollectOutcome = {
@@ -21,6 +22,29 @@ describe('refreshDeadlines (보내기를 흉내 냄)', () => {
     });
     return { sent, deps: { send, collect, now: () => T0 } satisfies RefreshDeps };
   };
+
+  it('background 처리 실패의 원인을 전달한다', async () => {
+    const collect = vi.fn(() => Promise.resolve(success));
+    await expect(
+      refreshDeadlines({
+        send: () =>
+          Promise.resolve({ ok: false, message: 'storage unavailable' }).then(readBackgroundReply),
+        collect,
+        now: () => T0,
+      }),
+    ).rejects.toThrow('storage unavailable');
+    expect(collect).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, { action: 'unknown' }, { action: 'fetch' }])(
+    '잘못된 조회 결정 %j를 거부한다',
+    async (decision) => {
+      const collect = vi.fn(() => Promise.resolve(success));
+      const { deps: d } = deps(decision, collect);
+      await expect(refreshDeadlines(d)).rejects.toThrow('마감 조회 결정 형식');
+      expect(collect).not.toHaveBeenCalled();
+    },
+  );
 
   it('조회할 차례가 아니면 조회하지 않는다', async () => {
     const collect = vi.fn(() => Promise.resolve(success));
