@@ -1,0 +1,36 @@
+.navtxt #remainingCounter:has(+ .khp-session-indicator:not([hidden])),
+.khp-session-indicator[hidden] {
+  display: none;
+}
+
+.khp-session-indicator {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.khp-marker-description {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.khp-session-indicator [role='tooltip'] {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 100%;
+  inset-inline-end: 0;
+  visibility: hidden;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #3a051f;
+  color: #fff;
+  pointer-events: none;
+}
+
+.khp-session-indicator:is(:hover, :focus-visible) [role='tooltip'] {
+  visibility: visible;
+}
