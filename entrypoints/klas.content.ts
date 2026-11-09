@@ -3,6 +3,7 @@
 // KLAS 탭(마일스톤 2)이 여기에 붙는다.
 
 import { deadlineCache } from '@/utils/deadline-cache';
+import { readAccountHash } from '@/utils/klas/account';
 import { extendSession } from '@/utils/klas/api';
 import { collectDeadlines } from '@/utils/klas/collect-deadlines';
 import { isTabMessage, type ExtensionMessage } from '@/utils/messages';
@@ -28,9 +29,12 @@ export default defineContentScript({
     browser.runtime.onMessage.addListener(onMessage);
     ctx.onInvalidated(() => browser.runtime.onMessage.removeListener(onMessage));
 
-    if (import.meta.env.DEV) {
+    const accountHash = await readAccountHash();
+    if (import.meta.env.DEV && accountHash) {
       // 개발 빌드에서는 캐시가 바뀔 때마다 요약을 콘솔에 남긴다. 다른 탭이 조회한 결과도 보인다.
+
       const unwatch = deadlineCache.watch((cache) => {
+        if (cache.accountHash !== accountHash) return;
         const { snapshot, lastError } = cache;
         console.info('[KLAS Helper Plus] 마감 캐시', {
           semester: snapshot?.semester,
@@ -50,6 +54,8 @@ export default defineContentScript({
         send,
         collect: (now) => collectDeadlines(now),
         now: Date.now,
+        accountHash,
+        readAccountHash,
       });
       if (import.meta.env.DEV) console.info('[KLAS Helper Plus] 조회 결정', decision.action);
     } catch (error) {

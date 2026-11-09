@@ -7,6 +7,8 @@ import type { ExtensionMessage } from '@/utils/messages';
 import { refreshDeadlines, type RefreshDeps } from '@/utils/refresh-deadlines';
 import { readBackgroundReply } from '@/utils/send-message';
 
+const accountHash = 'account-a';
+const readAccountHash = () => Promise.resolve(accountHash);
 const T0 = 1_800_000_000_000;
 const success: CollectOutcome = {
   ok: true,
@@ -20,7 +22,10 @@ describe('refreshDeadlines (보내기를 흉내 냄)', () => {
       sent.push(message);
       return Promise.resolve(message.type === 'deadlines/request' ? decision : undefined);
     });
-    return { sent, deps: { send, collect, now: () => T0 } satisfies RefreshDeps };
+    return {
+      sent,
+      deps: { send, collect, now: () => T0, accountHash, readAccountHash } satisfies RefreshDeps,
+    };
   };
 
   it('background 처리 실패의 원인을 전달한다', async () => {
@@ -31,6 +36,8 @@ describe('refreshDeadlines (보내기를 흉내 냄)', () => {
           Promise.resolve({ ok: false, message: 'storage unavailable' }).then(readBackgroundReply),
         collect,
         now: () => T0,
+        accountHash,
+        readAccountHash,
       }),
     ).rejects.toThrow('storage unavailable');
     expect(collect).not.toHaveBeenCalled();
@@ -60,8 +67,14 @@ describe('refreshDeadlines (보내기를 흉내 냄)', () => {
     );
     await refreshDeadlines(d, true);
     expect(sent).toEqual([
-      { type: 'deadlines/request', force: true },
-      { type: 'deadlines/report', leaseId: 'L1', outcome: success },
+      { type: 'deadlines/request', accountHash, force: true },
+      {
+        type: 'deadlines/report',
+        leaseId: 'L1',
+        accountHash,
+        verifiedAccountHash: accountHash,
+        outcome: success,
+      },
     ]);
   });
 
@@ -73,6 +86,8 @@ describe('refreshDeadlines (보내기를 흉내 냄)', () => {
     expect(sent[1]).toEqual({
       type: 'deadlines/report',
       leaseId: 'L1',
+      accountHash,
+      verifiedAccountHash: accountHash,
       outcome: { ok: false, error: { kind: 'unexpected', path: '', message: 'TypeError: boom' } },
     });
   });
@@ -100,9 +115,15 @@ describe('refreshDeadlines와 background 조정 (저장소 사용)', () => {
     (coordinator: ReturnType<typeof createFetchCoordinator>, tabId: number) =>
     (message: ExtensionMessage): Promise<unknown> => {
       if (message.type === 'deadlines/request')
-        return coordinator.request(tabId, message.force ?? false);
+        return coordinator.request(tabId, message.accountHash, message.force ?? false);
       if (message.type === 'deadlines/report')
-        return coordinator.report(tabId, message.leaseId, message.outcome);
+        return coordinator.report(
+          tabId,
+          message.leaseId,
+          message.accountHash,
+          message.verifiedAccountHash,
+          message.outcome,
+        );
       return Promise.resolve(undefined);
     };
 
@@ -112,6 +133,8 @@ describe('refreshDeadlines와 background 조정 (저장소 사용)', () => {
       send: tabSend(coordinator, 1),
       collect: () => Promise.reject(new Error('bug')),
       now: () => clock,
+      accountHash,
+      readAccountHash,
     });
 
     expect(decision).toEqual({ action: 'fetch', leaseId: 'L1' });
@@ -125,6 +148,6 @@ describe('refreshDeadlines와 background 조정 (저장소 사용)', () => {
 
     // 다른 탭은 조회 중인 탭을 기다리지 않고, 기록된 실패를 바로 본다.
     clock = T0 + 1_000;
-    await expect(coordinator.request(2, false)).resolves.toEqual({ action: 'use-cache' });
+    await expect(coordinator.request(2, accountHash)).resolves.toEqual({ action: 'use-cache' });
   });
 });
