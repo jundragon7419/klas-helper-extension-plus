@@ -61,6 +61,36 @@ describe('refreshDeadlines (보내기를 흉내 냄)', () => {
     expect(sent.map((m) => m.type)).toEqual(['deadlines/request']);
   });
 
+  it('계정을 알 수 없으면 결과를 현재 탭에만 돌려준다', async () => {
+    const { sent, deps: d } = deps({ action: 'fetch-uncached' }, () => Promise.resolve(success));
+    await expect(refreshDeadlines({ ...d, accountHash: null })).resolves.toEqual({
+      action: 'fetch-uncached',
+      outcome: success,
+    });
+    expect(sent).toEqual([{ type: 'deadlines/request', accountHash: null, force: false }]);
+  });
+
+  it('계정을 다시 확인할 수 없으면 로그인 만료를 화면에 전달한다', async () => {
+    const outcome: CollectOutcome = {
+      ok: false,
+      error: { kind: 'session', path: '', message: '' },
+    };
+    const { sent, deps: d } = deps({ action: 'fetch', leaseId: 'L1' }, () =>
+      Promise.resolve(outcome),
+    );
+    await expect(
+      refreshDeadlines({ ...d, readAccountHash: () => Promise.resolve(null) }),
+    ).resolves.toEqual({
+      action: 'account-unverified',
+      sessionExpired: true,
+    });
+    expect(sent[1]).toMatchObject({
+      type: 'deadlines/report',
+      leaseId: 'L1',
+      verifiedAccountHash: null,
+    });
+  });
+
   it('조회할 차례면 결과를 받은 조회권과 함께 알린다', async () => {
     const { sent, deps: d } = deps({ action: 'fetch', leaseId: 'L1' }, () =>
       Promise.resolve(success),

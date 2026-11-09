@@ -125,3 +125,127 @@ button svg {
   color: var(--khp-color-accent);
   font-weight: var(--khp-font-weight-medium);
 }
+
+.deadline-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--khp-space-3);
+  padding: var(--khp-space-2) var(--khp-space-5);
+  color: var(--khp-color-text-muted);
+  font-size: var(--khp-font-size-sm);
+}
+
+.deadline-refresh,
+.deadline-login {
+  border: 1px solid var(--khp-color-border-strong);
+  border-radius: var(--khp-radius-lg);
+  padding: var(--khp-space-2) var(--khp-space-4);
+  background: var(--khp-color-surface);
+  color: var(--khp-color-text);
+}
+
+.deadline-refresh {
+  min-height: var(--khp-size-target-min);
+  flex-shrink: 0;
+}
+
+.deadline-refresh:disabled {
+  color: var(--khp-color-text-muted);
+  cursor: default;
+}
+
+.deadline-login {
+  display: inline-block;
+  margin: 0 var(--khp-space-5) var(--khp-space-3);
+  color: var(--khp-color-accent);
+}
+
+.deadline-notice {
+  margin: 0 var(--khp-space-5) var(--khp-space-3);
+  padding: var(--khp-space-3) var(--khp-space-4);
+  border-radius: var(--khp-radius-md);
+  background: var(--khp-color-surface-sunken);
+  color: var(--khp-color-text-secondary);
+}
+
+.deadline-date {
+  margin: 0;
+  padding: var(--khp-space-3) var(--khp-space-5);
+  border-bottom: 1px solid var(--khp-color-border);
+  background: var(--khp-color-surface-sunken);
+  color: var(--khp-color-text-secondary);
+  font-size: var(--khp-font-size-sm);
+}
+
+.deadline-date span {
+  margin-inline-start: var(--khp-space-2);
+  font-weight: var(--khp-font-weight-regular);
+  color: var(--khp-color-text-muted);
+}
+
+.deadline-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deadline-item {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--khp-space-3);
+  padding: var(--khp-space-4) var(--khp-space-5);
+  border-bottom: 1px solid var(--khp-color-border-subtle);
+  background: var(--khp-color-surface);
+  color: var(--khp-color-text);
+  text-align: start;
+}
+
+.deadline-item:hover,
+.deadline-refresh:enabled:hover,
+.deadline-login:hover {
+  background: var(--khp-color-surface-hover);
+}
+
+.deadline-body {
+  display: grid;
+  gap: var(--khp-space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.deadline-course,
+.deadline-time,
+.deadline-remaining {
+  font-size: var(--khp-font-size-xs);
+  color: var(--khp-color-text-secondary);
+}
+
+.deadline-kind,
+.deadline-extended,
+.deadline-remaining {
+  display: inline-block;
+  padding-inline: var(--khp-space-2);
+  border-radius: var(--khp-radius-md);
+  background: var(--khp-color-surface-sunken);
+}
+
+.deadline-kind {
+  margin-inline-end: var(--khp-space-2);
+}
+
+.deadline-extended {
+  margin-inline-start: var(--khp-space-2);
+}
+
+.deadline-remaining {
+  flex-shrink: 0;
+  font-weight: var(--khp-font-weight-medium);
+}
+
+.deadline-remaining[data-urgent='true'] {
+  background: var(--khp-color-urgent-subtle);
+  color: var(--khp-color-urgent);
+}
