@@ -127,74 +127,114 @@ describe('createFetchCoordinator (저장소 사용)', () => {
 
   it('탭 세 개가 동시에 물어도 한 탭만 조회한다', async () => {
     const c = coordinator();
-    const decisions = await Promise.all([c.request(1), c.request(2), c.request(3)]);
+    const decisions = await Promise.all([
+      c.request(1, 'account-a'),
+      c.request(2, 'account-a'),
+      c.request(3, 'account-a'),
+    ]);
     expect(decisions.map((d) => d.action)).toEqual(['fetch', 'wait', 'wait']);
   });
 
   it('결과를 알리면 캐시에 저장하고 조회권을 돌려받으며, 다음 탭은 캐시를 쓴다', async () => {
     const c = coordinator();
-    const first = await c.request(1);
+    const first = await c.request(1, 'account-a');
     if (first.action !== 'fetch') throw new Error('expected fetch');
-    await c.report(1, first.leaseId, success(T0));
+    await c.report(1, first.leaseId, 'account-a', 'account-a', success(T0));
     expect((await deadlineCache.getValue()).snapshot?.checkedAt).toBe(T0);
     expect(await fetchLease.getValue()).toBeNull();
     clock = T0 + 1000;
-    expect(await c.request(2)).toEqual({ action: 'use-cache' });
+    expect(await c.request(2, 'account-a')).toEqual({ action: 'use-cache' });
   });
 
   it('조회 중인 탭이 닫히면 다른 탭이 바로 이어받는다', async () => {
     const c = coordinator();
-    await c.request(1);
-    expect((await c.request(2)).action).toBe('wait');
+    await c.request(1, 'account-a');
+    expect((await c.request(2, 'account-a')).action).toBe('wait');
     await c.releaseTab(1);
-    expect((await c.request(2)).action).toBe('fetch');
+    expect((await c.request(2, 'account-a')).action).toBe('fetch');
   });
 
   it('다른 탭이 닫혀도 조회권은 그대로다', async () => {
     const c = coordinator();
-    await c.request(1);
+    await c.request(1, 'account-a');
     await c.releaseTab(2);
     expect((await fetchLease.getValue())?.tabId).toBe(1);
   });
 
   it('캐시가 비어 있으면 늦게 온 성공 결과를 저장하고 실패는 버린다', async () => {
     const c = coordinator();
-    const first = await c.request(1);
+    const first = await c.request(1, 'account-a');
     clock = T0 + LEASE_MS;
-    const second = await c.request(2);
+    const second = await c.request(2, 'account-a');
     expect(second.action).toBe('fetch');
     if (first.action !== 'fetch') throw new Error('expected fetch');
 
-    await c.report(1, first.leaseId, failure('network'));
+    await c.report(1, first.leaseId, 'account-a', 'account-a', failure('network'));
     expect((await deadlineCache.getValue()).lastError).toBeNull();
     expect((await fetchLease.getValue())?.tabId).toBe(2);
 
-    await c.report(1, first.leaseId, success(T0 + 1));
+    await c.report(1, first.leaseId, 'account-a', 'account-a', success(T0 + 1));
     expect((await deadlineCache.getValue()).snapshot?.checkedAt).toBe(T0 + 1);
     expect((await fetchLease.getValue())?.tabId).toBe(2);
   });
 
   it('늦게 온 성공 결과가 다른 탭이 저장한 최신 결과를 덮어쓰지 않는다', async () => {
     const c = coordinator();
-    const first = await c.request(1);
+    const first = await c.request(1, 'account-a');
     clock = T0 + LEASE_MS;
-    const second = await c.request(2);
+    const second = await c.request(2, 'account-a');
     if (first.action !== 'fetch' || second.action !== 'fetch') throw new Error('expected fetch');
 
-    await c.report(2, second.leaseId, success(clock));
-    await c.report(1, first.leaseId, success(T0));
+    await c.report(2, second.leaseId, 'account-a', 'account-a', success(clock));
+    await c.report(1, first.leaseId, 'account-a', 'account-a', success(T0));
 
     expect((await deadlineCache.getValue()).snapshot?.checkedAt).toBe(clock);
   });
 
+  it('계정이 바뀌면 캐시를 비우고 이전 탭의 늦은 성공을 버린다', async () => {
+    const c = coordinator();
+    await deadlineCache.setValue({
+      ...EMPTY_CACHE,
+      accountHash: 'account-a',
+      snapshot: snapshot(T0),
+    });
+    const first = await c.request(1, 'account-a', true);
+    const second = await c.request(2, 'account-b');
+    if (first.action !== 'fetch' || second.action !== 'fetch') throw new Error('expected fetch');
+
+    await c.report(1, first.leaseId, 'account-a', 'account-a', success(T0 + 1));
+    expect(await deadlineCache.getValue()).toEqual({ ...EMPTY_CACHE, accountHash: 'account-b' });
+    expect((await fetchLease.getValue())?.leaseId).toBe(second.leaseId);
+  });
+
+  it('조회 도중 계정이 바뀌면 결과를 저장하지 않고 조회권을 돌려준다', async () => {
+    const c = coordinator();
+    const first = await c.request(1, 'account-a');
+    if (first.action !== 'fetch') throw new Error('expected fetch');
+
+    await c.report(1, first.leaseId, 'account-a', 'account-b', success(T0));
+    expect((await deadlineCache.getValue()).snapshot).toBeNull();
+    expect(await fetchLease.getValue()).toBeNull();
+  });
+
+  it('계정을 모르면 캐시를 사용하지 않고 이전 버전의 캐시는 식별 후 비운다', async () => {
+    const c = coordinator();
+    const oldCache = { ...EMPTY_CACHE, snapshot: snapshot(T0) };
+    await deadlineCache.setValue(oldCache);
+    await expect(c.request(1, null)).resolves.toEqual({ action: 'fetch-uncached' });
+    expect(await deadlineCache.getValue()).toEqual(oldCache);
+    expect((await c.request(1, 'account-a')).action).toBe('fetch');
+    expect(await deadlineCache.getValue()).toEqual({ ...EMPTY_CACHE, accountHash: 'account-a' });
+  });
+
   it('실패 뒤 1분 동안은 다시 조회하지 않는다', async () => {
     const c = coordinator();
-    const first = await c.request(1);
+    const first = await c.request(1, 'account-a');
     if (first.action !== 'fetch') throw new Error('expected fetch');
-    await c.report(1, first.leaseId, failure('not-json'));
+    await c.report(1, first.leaseId, 'account-a', 'account-a', failure('not-json'));
     clock = T0 + RETRY_AFTER_FAILURE_MS - 1;
-    expect(await c.request(2)).toEqual({ action: 'use-cache' });
+    expect(await c.request(2, 'account-a')).toEqual({ action: 'use-cache' });
     clock = T0 + RETRY_AFTER_FAILURE_MS;
-    expect((await c.request(2)).action).toBe('fetch');
+    expect((await c.request(2, 'account-a')).action).toBe('fetch');
   });
 });

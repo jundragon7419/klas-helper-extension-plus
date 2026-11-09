@@ -23,6 +23,8 @@ export const RETRY_AFTER_FAILURE_MS = 60_000;
 export const LEASE_MS = 3 * 60_000;
 
 export interface DeadlineCache {
+  /** 현재 캐시의 계정. 이전 버전에서 저장한 캐시는 이 값이 없다. */
+  accountHash?: string;
   /** 마지막으로 성공한 결과 */
   snapshot: DeadlineSnapshot | null;
   /** 마지막 조회가 실패했으면 그 이유. 성공하면 지운다. */
@@ -42,8 +44,8 @@ export function applyOutcome(
   outcome: CollectOutcome,
   now: number,
 ): DeadlineCache {
-  if (outcome.ok) return { snapshot: outcome.snapshot, lastError: null };
-  return { snapshot: cache.snapshot, lastError: { ...outcome.error, at: now } };
+  if (outcome.ok) return { ...cache, snapshot: outcome.snapshot, lastError: null };
+  return { ...cache, lastError: { ...outcome.error, at: now } };
 }
 
 /**

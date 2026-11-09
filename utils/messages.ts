@@ -7,9 +7,15 @@ export type ExtensionMessage =
   /** KLAS 학생 페이지가 열렸다. 세션 연장 대상 탭으로 등록한다. */
   | { type: 'klas/opened' }
   /** KLAS 탭이 마감을 조회해도 되는지 묻는다. 답은 FetchDecision */
-  | { type: 'deadlines/request'; force?: boolean }
+  | { type: 'deadlines/request'; accountHash: string | null; force?: boolean }
   /** 조회한 탭이 결과를 알린다. */
-  | { type: 'deadlines/report'; leaseId: string; outcome: CollectOutcome };
+  | {
+      type: 'deadlines/report';
+      leaseId: string;
+      accountHash: string;
+      verifiedAccountHash: string | null;
+      outcome: CollectOutcome;
+    };
 
 /** background → content script */
 export type TabMessage =

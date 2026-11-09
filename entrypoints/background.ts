@@ -41,9 +41,15 @@ export default defineBackground(() => {
       case 'klas/opened':
         return keeper.registerTab(tabId);
       case 'deadlines/request':
-        return coordinator.request(tabId, message.force ?? false);
+        return coordinator.request(tabId, message.accountHash ?? null, message.force ?? false);
       case 'deadlines/report':
-        return coordinator.report(tabId, message.leaseId, message.outcome);
+        return coordinator.report(
+          tabId,
+          message.leaseId,
+          message.accountHash,
+          message.verifiedAccountHash,
+          message.outcome,
+        );
     }
   };
 

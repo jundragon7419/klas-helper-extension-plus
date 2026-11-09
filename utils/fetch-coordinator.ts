@@ -9,6 +9,7 @@
 
 import {
   applyOutcome,
+  EMPTY_CACHE,
   deadlineCache,
   isFresh,
   LEASE_MS,
@@ -32,7 +33,10 @@ export const fetchLease = storage.defineItem<FetchLease | null>('session:fetchLe
 });
 
 export type FetchDecision =
-  { action: 'fetch'; leaseId: string } | { action: 'use-cache' } | { action: 'wait' };
+  | { action: 'fetch'; leaseId: string }
+  | { action: 'use-cache' }
+  | { action: 'wait' }
+  | { action: 'fetch-uncached' };
 
 export interface DecideInput {
   cache: DeadlineCache;
@@ -77,10 +81,24 @@ export function createFetchCoordinator(options: CoordinatorOptions = {}) {
 
   return {
     /** 탭이 조회해도 되는지 묻는다. */
-    request(tabId: number, force = false): Promise<FetchDecision> {
+    request(tabId: number, accountHash: string | null, force = false): Promise<FetchDecision> {
+      if (accountHash === null) return Promise.resolve({ action: 'fetch-uncached' });
       return serial(async () => {
         const [cache, lease] = await Promise.all([deadlineCache.getValue(), fetchLease.getValue()]);
-        const result = decide({ cache, lease, tabId, force, now: now(), newLeaseId });
+        const sameAccount = cache.accountHash === accountHash;
+        const accountCache = sameAccount ? cache : { ...EMPTY_CACHE, accountHash };
+        if (!sameAccount) {
+          await fetchLease.setValue(null);
+          await deadlineCache.setValue(accountCache);
+        }
+        const result = decide({
+          cache: accountCache,
+          lease: sameAccount ? lease : null,
+          tabId,
+          force,
+          now: now(),
+          newLeaseId,
+        });
         if (result.lease !== lease) await fetchLease.setValue(result.lease);
         return result.decision;
       });
@@ -90,10 +108,24 @@ export function createFetchCoordinator(options: CoordinatorOptions = {}) {
      * 조회 결과를 받는다. 조회권이 맞으면 저장하고 조회권을 돌려받는다.
      * 조회권이 바뀐 뒤 도착한 성공 결과는 캐시가 비어 있거나 저장된 결과보다 새로울 때만 저장한다.
      */
-    report(tabId: number, leaseId: string, outcome: CollectOutcome): Promise<void> {
+    report(
+      tabId: number,
+      leaseId: string,
+      accountHash: string,
+      verifiedAccountHash: string | null,
+      outcome: CollectOutcome,
+    ): Promise<void> {
       return serial(async () => {
         const [cache, lease] = await Promise.all([deadlineCache.getValue(), fetchLease.getValue()]);
         const current = lease?.tabId === tabId && lease.leaseId === leaseId;
+        if (
+          !accountHash ||
+          cache.accountHash !== accountHash ||
+          verifiedAccountHash !== accountHash
+        ) {
+          if (current) await fetchLease.setValue(null);
+          return;
+        }
         const newerSuccess =
           outcome.ok &&
           (cache.snapshot === null || outcome.snapshot.checkedAt > cache.snapshot.checkedAt);
