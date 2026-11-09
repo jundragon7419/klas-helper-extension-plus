@@ -33,8 +33,9 @@ export const KLAS_PATHS = {
  * - network: 요청이 실패했거나, 시간이 초과됐거나, HTTP 오류가 났다.
  * - not-json: 로그인 페이지도 JSON도 아닌 응답이 왔다.
  * - schema: JSON은 왔지만 쓰는 필드가 없거나 형식이 다르다. KLAS가 바뀌었을 가능성이 크다.
+ * - unexpected: 확장 코드에서 예외가 나서 조회가 중간에 멈췄다. 확장 버그다.
  */
-export type KlasErrorKind = 'session' | 'network' | 'not-json' | 'schema';
+export type KlasErrorKind = 'session' | 'network' | 'not-json' | 'schema' | 'unexpected';
 
 export interface KlasError {
   kind: KlasErrorKind;
