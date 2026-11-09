@@ -32,24 +32,19 @@
             <aside class="s-drawer" aria-label="마감 일정 견본">
               <div class="s-brand">
                 <span class="s-brand-title">KLAS Helper+</span>
-                <button type="button" class="s-icon-btn s-icon-btn-brand" aria-label="설정">
+                <button
+                  type="button"
+                  class="s-icon-btn s-icon-btn-brand"
+                  aria-label="마감 일정 닫기"
+                >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3" />
-                    <path
-                      d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"
-                    />
+                    <path d="m6 6 12 12M18 6 6 18" />
                   </svg>
-                </button>
-                <button type="button" class="s-icon-btn s-icon-btn-brand" aria-label="서랍 닫기">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
                 </button>
               </div>
               <div class="s-tabs" role="tablist" aria-label="KLAS Helper+ 기능">
                 <button type="button" class="s-tab is-active" role="tab" aria-selected="true">
                   마감 일정
-                </button>
-                <button type="button" class="s-tab" role="tab" aria-selected="false" disabled>
-                  (다음 탭)
                 </button>
               </div>
               <div class="s-meta">
@@ -95,16 +90,12 @@
                 </span>
                 <span class="s-left">3일 8시간 남음</span>
               </a>
-              <footer class="s-foot">
-                <span>세션 자동 연장 켜짐 (10분마다)</span>
-                <a href="#">설정에서 끄기</a>
-              </footer>
             </aside>
           </div>
 
           <div class="pv-sample-side">
             <div class="pv-card">
-              <div class="pv-lbl">손잡이 (기본, 마우스 올림, 포커스)</div>
+              <div class="pv-lbl">손잡이 (기본, 마우스 올림, 포커스, 패널 열림)</div>
               <div class="s-handle-row">
                 <button type="button" class="s-handle" aria-label="마감 일정 열기">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
@@ -114,6 +105,9 @@
                 </button>
                 <button type="button" class="s-handle s-handle-focus" aria-label="마감 일정 열기">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+                </button>
+                <button type="button" class="s-handle" aria-label="손잡이로 마감 일정 닫기">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
                 </button>
               </div>
             </div>
