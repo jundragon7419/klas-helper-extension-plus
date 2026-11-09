@@ -88,13 +88,16 @@ export function createFetchCoordinator(options: CoordinatorOptions = {}) {
 
     /**
      * 조회 결과를 받는다. 조회권이 맞으면 저장하고 조회권을 돌려받는다.
-     * 조회권이 만료되어 다른 탭이 이어받은 뒤 늦게 온 결과는, 성공이면 저장하고 실패면 버린다.
+     * 조회권이 바뀐 뒤 도착한 성공 결과는 캐시가 비어 있거나 저장된 결과보다 새로울 때만 저장한다.
      */
     report(tabId: number, leaseId: string, outcome: CollectOutcome): Promise<void> {
       return serial(async () => {
         const [cache, lease] = await Promise.all([deadlineCache.getValue(), fetchLease.getValue()]);
         const current = lease?.tabId === tabId && lease.leaseId === leaseId;
-        if (current || outcome.ok)
+        const newerSuccess =
+          outcome.ok &&
+          (cache.snapshot === null || outcome.snapshot.checkedAt > cache.snapshot.checkedAt);
+        if (current || newerSuccess)
           await deadlineCache.setValue(applyOutcome(cache, outcome, now()));
         if (current) await fetchLease.setValue(null);
       });

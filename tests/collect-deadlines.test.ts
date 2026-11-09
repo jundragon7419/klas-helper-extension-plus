@@ -49,6 +49,29 @@ describe('collectDeadlines', () => {
     expect(outcome.snapshot.deadlines).toHaveLength(19 + 14 + 2);
   });
 
+  it('모든 마감 목록의 조회가 실패하면 전체 실패다', async () => {
+    const fetch = fixtureFetch((path) =>
+      path === KLAS_PATHS.semesters ? undefined : json({ changed: true }),
+    );
+
+    await expect(collectDeadlines(now, { fetch })).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'schema', path: KLAS_PATHS.online },
+    });
+    expect(fetch).toHaveBeenCalledTimes(25);
+  });
+
+  it('조회에 성공한 빈 목록이 있으면 일부 실패로 처리한다', async () => {
+    const fetch = fixtureFetch((path) =>
+      path === KLAS_PATHS.semesters ? undefined : json(path === KLAS_PATHS.online ? [] : {}),
+    );
+
+    const outcome = await collectDeadlines(now, { fetch });
+    expect(outcome).toMatchObject({ ok: true, snapshot: { deadlines: [] } });
+    if (!outcome.ok) return;
+    expect(outcome.snapshot.failures).toHaveLength(18);
+  });
+
   it('고를 학기가 없으면 빈 결과다 (입학 전)', async () => {
     const fetch = fixtureFetch((path) =>
       path === KLAS_PATHS.semesters
