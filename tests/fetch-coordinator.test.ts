@@ -157,7 +157,7 @@ describe('createFetchCoordinator (저장소 사용)', () => {
     expect((await fetchLease.getValue())?.tabId).toBe(1);
   });
 
-  it('늦게 온 결과: 성공이면 저장하고, 실패면 버린다', async () => {
+  it('캐시가 비어 있으면 늦게 온 성공 결과를 저장하고 실패는 버린다', async () => {
     const c = coordinator();
     const first = await c.request(1);
     clock = T0 + LEASE_MS;
@@ -172,6 +172,19 @@ describe('createFetchCoordinator (저장소 사용)', () => {
     await c.report(1, first.leaseId, success(T0 + 1));
     expect((await deadlineCache.getValue()).snapshot?.checkedAt).toBe(T0 + 1);
     expect((await fetchLease.getValue())?.tabId).toBe(2);
+  });
+
+  it('늦게 온 성공 결과가 다른 탭이 저장한 최신 결과를 덮어쓰지 않는다', async () => {
+    const c = coordinator();
+    const first = await c.request(1);
+    clock = T0 + LEASE_MS;
+    const second = await c.request(2);
+    if (first.action !== 'fetch' || second.action !== 'fetch') throw new Error('expected fetch');
+
+    await c.report(2, second.leaseId, success(clock));
+    await c.report(1, first.leaseId, success(T0));
+
+    expect((await deadlineCache.getValue()).snapshot?.checkedAt).toBe(clock);
   });
 
   it('실패 뒤 1분 동안은 다시 조회하지 않는다', async () => {
