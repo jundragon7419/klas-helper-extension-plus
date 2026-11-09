@@ -178,6 +178,33 @@ describe('createFetchCoordinator (저장소 사용)', () => {
     expect((await fetchLease.getValue())?.tabId).toBe(2);
   });
 
+  it('늦은 성공으로 목록을 갱신해도 최근 실패는 새 조회가 성공할 때까지 유지한다', async () => {
+    const c = coordinator();
+    const first = await c.request(1, 'account-a');
+    clock = T0 + LEASE_MS;
+    const second = await c.request(2, 'account-a');
+    if (first.action !== 'fetch' || second.action !== 'fetch') throw new Error('expected fetch');
+
+    clock += 1;
+    const failedAt = clock;
+    await c.report(2, second.leaseId, 'account-a', 'account-a', failure('network'));
+    clock += 1;
+    await c.report(1, first.leaseId, 'account-a', 'account-a', success(T0));
+    expect(await deadlineCache.getValue()).toMatchObject({
+      snapshot: snapshot(T0),
+      lastError: { kind: 'network', at: failedAt },
+    });
+    expect(await c.request(3, 'account-a')).toEqual({ action: 'use-cache' });
+
+    const retry = await c.request(3, 'account-a', true);
+    if (retry.action !== 'fetch') throw new Error('expected fetch');
+    await c.report(3, retry.leaseId, 'account-a', 'account-a', success(clock));
+    expect(await deadlineCache.getValue()).toMatchObject({
+      snapshot: snapshot(clock),
+      lastError: null,
+    });
+  });
+
   it('늦게 온 성공 결과가 다른 탭이 저장한 최신 결과를 덮어쓰지 않는다', async () => {
     const c = coordinator();
     const first = await c.request(1, 'account-a');
