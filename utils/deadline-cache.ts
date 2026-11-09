@@ -25,6 +25,8 @@ export const LEASE_MS = 3 * 60_000;
 export interface DeadlineCache {
   /** 현재 캐시의 계정. 이전 버전에서 저장한 캐시는 이 값이 없다. */
   accountHash?: string;
+  /** 계정이 바뀔 때마다 새로 발급하는 조회권 범위. */
+  fetchScope?: string;
   /** 마지막으로 성공한 결과 */
   snapshot: DeadlineSnapshot | null;
   /** 마지막 조회가 실패했으면 그 이유. 성공하면 지운다. */

@@ -203,17 +203,39 @@ describe('createFetchCoordinator (저장소 사용)', () => {
     if (first.action !== 'fetch' || second.action !== 'fetch') throw new Error('expected fetch');
 
     await c.report(1, first.leaseId, 'account-a', 'account-a', success(T0 + 1));
-    expect(await deadlineCache.getValue()).toEqual({ ...EMPTY_CACHE, accountHash: 'account-b' });
+    expect(await deadlineCache.getValue()).toMatchObject({
+      ...EMPTY_CACHE,
+      accountHash: 'account-b',
+    });
     expect((await fetchLease.getValue())?.leaseId).toBe(second.leaseId);
+  });
+
+  it('A에서 B를 거쳐 다시 A가 되어도 최초 A 조회 결과를 버린다', async () => {
+    const c = coordinator();
+    const first = await c.request(1, 'account-a');
+    await c.request(2, 'account-b');
+    const latest = await c.request(3, 'account-a');
+    if (first.action !== 'fetch' || latest.action !== 'fetch') throw new Error('expected fetch');
+
+    await coordinator().report(1, first.leaseId, 'account-a', 'account-a', success(T0));
+    expect((await deadlineCache.getValue()).snapshot).toBeNull();
+    expect((await fetchLease.getValue())?.leaseId).toBe(latest.leaseId);
+
+    await c.report(3, latest.leaseId, 'account-a', 'account-a', success(T0 + 1));
+    expect((await deadlineCache.getValue()).snapshot).toEqual(snapshot(T0 + 1));
+    expect(await fetchLease.getValue()).toBeNull();
   });
 
   it('조회 도중 계정이 바뀌면 결과를 저장하지 않고 조회권을 돌려준다', async () => {
     const c = coordinator();
     const first = await c.request(1, 'account-a');
     if (first.action !== 'fetch') throw new Error('expected fetch');
+    await c.report(1, first.leaseId, 'account-a', 'account-a', success(T0));
+    const next = await c.request(1, 'account-a', true);
+    if (next.action !== 'fetch') throw new Error('expected fetch');
 
-    await c.report(1, first.leaseId, 'account-a', 'account-b', success(T0));
-    expect((await deadlineCache.getValue()).snapshot).toBeNull();
+    await c.report(1, next.leaseId, 'account-a', 'account-b', success(T0 + 1));
+    expect(await deadlineCache.getValue()).toEqual(EMPTY_CACHE);
     expect(await fetchLease.getValue()).toBeNull();
   });
 
@@ -224,7 +246,10 @@ describe('createFetchCoordinator (저장소 사용)', () => {
     await expect(c.request(1, null)).resolves.toEqual({ action: 'fetch-uncached' });
     expect(await deadlineCache.getValue()).toEqual(oldCache);
     expect((await c.request(1, 'account-a')).action).toBe('fetch');
-    expect(await deadlineCache.getValue()).toEqual({ ...EMPTY_CACHE, accountHash: 'account-a' });
+    expect(await deadlineCache.getValue()).toMatchObject({
+      ...EMPTY_CACHE,
+      accountHash: 'account-a',
+    });
   });
 
   it('실패 뒤 1분 동안은 다시 조회하지 않는다', async () => {

@@ -61,11 +61,11 @@ describe('refreshDeadlines (보내기를 흉내 냄)', () => {
     expect(sent.map((m) => m.type)).toEqual(['deadlines/request']);
   });
 
-  it('계정을 알 수 없으면 결과를 현재 탭에만 돌려준다', async () => {
+  it('조회 시작 시 계정을 확인하지 못하면 성공한 목록도 표시하지 않는다', async () => {
     const { sent, deps: d } = deps({ action: 'fetch-uncached' }, () => Promise.resolve(success));
     await expect(refreshDeadlines({ ...d, accountHash: null })).resolves.toEqual({
-      action: 'fetch-uncached',
-      outcome: success,
+      action: 'account-unverified',
+      sessionExpired: false,
     });
     expect(sent).toEqual([{ type: 'deadlines/request', accountHash: null, force: false }]);
   });
@@ -167,7 +167,10 @@ describe('refreshDeadlines와 background 조정 (저장소 사용)', () => {
       readAccountHash,
     });
 
-    expect(decision).toEqual({ action: 'fetch', leaseId: 'L1' });
+    expect(decision).toEqual({
+      action: 'fetch',
+      leaseId: `${(await deadlineCache.getValue()).fetchScope}:L1`,
+    });
     expect(await fetchLease.getValue()).toBeNull();
     expect((await deadlineCache.getValue()).lastError).toEqual({
       kind: 'unexpected',

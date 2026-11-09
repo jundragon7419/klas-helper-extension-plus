@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
-import {
-  applyOutcome,
-  deadlineCache,
-  EMPTY_CACHE,
-  LEASE_MS,
-  type DeadlineCache,
-} from '../deadline-cache';
+import { deadlineCache, EMPTY_CACHE, LEASE_MS, type DeadlineCache } from '../deadline-cache';
 import { readAccountHash } from '../klas/account';
 import { collectDeadlines } from '../klas/collect-deadlines';
 import { refreshDeadlines, type RefreshDeps } from '../refresh-deadlines';
@@ -61,9 +55,7 @@ export function useDeadlineList(ctx: ContentScriptContext, send: RefreshDeps['se
           result = await refreshDeadlines(deps);
         }
         if (ctx.isInvalid) return;
-        if (result.action === 'fetch-uncached') {
-          setLocal(applyOutcome(EMPTY_CACHE, result.outcome, Date.now()));
-        } else if (result.action === 'account-unverified') {
+        if (result.action === 'account-unverified') {
           setAccountHash(null);
           setLocal({
             ...EMPTY_CACHE,
@@ -98,7 +90,10 @@ export function useDeadlineList(ctx: ContentScriptContext, send: RefreshDeps['se
 
   const visibleShared = accountHash && shared.accountHash === accountHash ? shared : EMPTY_CACHE;
   const visibleLocal =
-    local?.accountHash && local.accountHash !== shared.accountHash ? null : local;
+    local?.accountHash &&
+    (local.accountHash !== shared.accountHash || local.fetchScope !== shared.fetchScope)
+      ? null
+      : local;
   const cache =
     visibleShared.lastError?.kind === 'session' ? visibleShared : (visibleLocal ?? visibleShared);
   return { cache, checking, check };
