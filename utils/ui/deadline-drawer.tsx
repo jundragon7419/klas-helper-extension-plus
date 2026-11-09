@@ -5,12 +5,14 @@ import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import type { RefreshDeps } from '../refresh-deadlines';
 import drawerCss from './deadline-drawer.css?inline';
 import { DeadlinePanel } from './deadline-panel';
+import { SessionSettings } from './session-settings';
 import { useDeadlineList } from './use-deadline-list';
 import { tokens, tokensToCss } from './tokens';
 
 function DeadlineDrawer({ ctx, send }: { ctx: ContentScriptContext; send: RefreshDeps['send'] }) {
   const { cache, checking, check } = useDeadlineList(ctx, send);
   const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const handle = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const drawer = useRef<HTMLElement>(null);
@@ -90,18 +92,30 @@ function DeadlineDrawer({ ctx, send }: { ctx: ContentScriptContext; send: Refres
       >
         <header class="drawer-brand">
           <span>KLAS Helper+</span>
-          <button
-            ref={closeButton}
-            class="drawer-close"
-            type="button"
-            aria-label="마감 일정 닫기"
-            onClick={close}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m6 6 12 12M18 6 6 18" />
-            </svg>
-          </button>
+          <div class="drawer-brand-actions">
+            <button
+              class="drawer-settings-button"
+              type="button"
+              aria-controls="drawer-session-settings"
+              aria-expanded={settingsOpen}
+              onClick={() => setSettingsOpen((shown) => !shown)}
+            >
+              설정
+            </button>
+            <button
+              ref={closeButton}
+              class="drawer-close"
+              type="button"
+              aria-label="마감 일정 닫기"
+              onClick={close}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </div>
         </header>
+        <SessionSettings open={settingsOpen} />
         <div class="drawer-tabs" role="tablist" aria-label="KLAS Helper+ 기능">
           <button
             id="deadline-tab"

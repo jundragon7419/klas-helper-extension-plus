@@ -70,11 +70,10 @@ export function createSessionKeeper(deps: SessionKeeperDeps) {
           await deps.clearAlarm();
           return { status: 'no-tab' };
         }
-        if (!(await sessionKeepAlive.getValue())) return { status: 'disabled' };
-
         const gone: number[] = [];
         try {
           for (const tabId of tabs) {
+            if (!(await sessionKeepAlive.getValue())) return { status: 'disabled' };
             let result: KlasResult<SessionStatus>;
             try {
               result = await deps.extendInTab(tabId);

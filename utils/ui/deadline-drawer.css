@@ -93,6 +93,12 @@ button svg {
   font-weight: var(--khp-font-weight-bold);
 }
 
+.drawer-brand-actions {
+  display: flex;
+  align-items: center;
+}
+
+.drawer-settings-button,
 .drawer-close {
   display: grid;
   place-items: center;
@@ -103,14 +109,88 @@ button svg {
   color: inherit;
 }
 
+.drawer-settings-button {
+  font-size: var(--khp-font-size-sm);
+}
+
 .drawer-handle:focus-visible,
+.drawer-settings-button:focus-visible,
 .drawer-close:focus-visible {
   outline-color: currentColor;
 }
 
+.drawer-settings-button:hover,
 .drawer-close:hover {
   background: radial-gradient(circle closest-side, var(--khp-color-accent-hover) 97%, transparent)
     center / 32px 32px no-repeat;
+}
+
+.drawer-session-settings {
+  padding: var(--khp-space-2) var(--khp-space-5);
+  border-bottom: 1px solid var(--khp-color-tab-border);
+}
+
+.session-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--khp-space-3);
+  width: 100%;
+  min-height: var(--khp-size-target-min);
+  padding: 0;
+  border-radius: var(--khp-radius-md);
+  background: var(--khp-color-surface);
+  color: var(--khp-color-text);
+  text-align: start;
+}
+
+.session-switch[aria-disabled='true'] {
+  color: var(--khp-color-text-muted);
+  cursor: default;
+}
+
+.session-switch-value {
+  display: flex;
+  align-items: center;
+  gap: var(--khp-space-2);
+  flex-shrink: 0;
+  font-size: var(--khp-font-size-sm);
+}
+
+.session-switch-track {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border: 1px solid var(--khp-color-text-muted);
+  border-radius: var(--khp-radius-pill);
+  background: var(--khp-color-surface-sunken);
+}
+
+.session-switch-track::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: var(--khp-radius-pill);
+  background: var(--khp-color-text-muted);
+}
+
+.session-switch[aria-checked='true'] .session-switch-track {
+  justify-content: flex-end;
+  border-color: var(--khp-color-accent);
+  background: var(--khp-color-accent);
+}
+
+.session-switch[aria-checked='true'] .session-switch-track::before {
+  background: var(--khp-color-on-accent);
+}
+
+.drawer-session-settings p {
+  margin: 0 0 var(--khp-space-2);
+  color: var(--khp-color-text-muted);
+  font-size: var(--khp-font-size-sm);
 }
 
 .drawer-tabs {

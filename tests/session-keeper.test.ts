@@ -87,6 +87,23 @@ describe('createSessionKeeper', () => {
     expect(deps.extendInTab).not.toHaveBeenCalled();
   });
 
+  it('탭의 응답을 기다리는 사이에 설정을 끄면 다른 탭에 연장을 맡기지 않는다', async () => {
+    const { deps, keeper } = setup();
+    deps.extendInTab.mockImplementationOnce(async () => {
+      await sessionKeepAlive.setValue(false);
+      throw new Error('Could not establish connection');
+    });
+    await keeper.registerTab(1);
+    await keeper.registerTab(2);
+
+    expect(await keeper.onAlarm()).toEqual({ status: 'disabled' });
+    expect(deps.extendInTab).toHaveBeenCalledTimes(1);
+    expect(await klasTabs.getValue()).toEqual([2]);
+
+    await sessionKeepAlive.setValue(true);
+    expect(await keeper.onAlarm()).toEqual({ status: 'extended', tabId: 2 });
+  });
+
   it('설정은 기본으로 켜져 있다', async () => {
     expect(await sessionKeepAlive.getValue()).toBe(true);
   });
