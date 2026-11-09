@@ -86,20 +86,25 @@ export function createFetchCoordinator(options: CoordinatorOptions = {}) {
       return serial(async () => {
         const [cache, lease] = await Promise.all([deadlineCache.getValue(), fetchLease.getValue()]);
         const sameAccount = cache.accountHash === accountHash;
-        const accountCache = sameAccount ? cache : { ...EMPTY_CACHE, accountHash };
-        if (!sameAccount) {
+        const existingScope = sameAccount ? cache.fetchScope : undefined;
+        const fetchScope = existingScope ?? crypto.randomUUID();
+        const activeLease = existingScope ? lease : null;
+        const accountCache = sameAccount
+          ? { ...cache, fetchScope }
+          : { ...EMPTY_CACHE, accountHash, fetchScope };
+        if (!existingScope) {
           await fetchLease.setValue(null);
           await deadlineCache.setValue(accountCache);
         }
         const result = decide({
           cache: accountCache,
-          lease: sameAccount ? lease : null,
+          lease: activeLease,
           tabId,
           force,
           now: now(),
-          newLeaseId,
+          newLeaseId: () => `${fetchScope}:${newLeaseId()}`,
         });
-        if (result.lease !== lease) await fetchLease.setValue(result.lease);
+        if (result.lease !== activeLease) await fetchLease.setValue(result.lease);
         return result.decision;
       });
     },
@@ -121,9 +126,17 @@ export function createFetchCoordinator(options: CoordinatorOptions = {}) {
         if (
           !accountHash ||
           cache.accountHash !== accountHash ||
-          verifiedAccountHash !== accountHash
+          !cache.fetchScope ||
+          typeof leaseId !== 'string' ||
+          !leaseId.startsWith(`${cache.fetchScope}:`)
         ) {
-          if (current) await fetchLease.setValue(null);
+          return;
+        }
+        if (verifiedAccountHash !== accountHash) {
+          if (current) {
+            await fetchLease.setValue(null);
+            if (verifiedAccountHash !== null) await deadlineCache.setValue(EMPTY_CACHE);
+          }
           return;
         }
         const newerSuccess =

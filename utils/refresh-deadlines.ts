@@ -25,7 +25,6 @@ function unexpectedOutcome(error: unknown): CollectOutcome {
  */
 export type RefreshResult =
   | Exclude<FetchDecision, { action: 'fetch-uncached' }>
-  | { action: 'fetch-uncached'; outcome: CollectOutcome }
   | { action: 'account-unverified'; sessionExpired: boolean };
 
 export async function refreshDeadlines(deps: RefreshDeps, force = false): Promise<RefreshResult> {
@@ -37,7 +36,11 @@ export async function refreshDeadlines(deps: RefreshDeps, force = false): Promis
   const { action } = decision;
   if (action === 'use-cache' || action === 'wait') return { action };
   if (action === 'fetch-uncached' && accountHash === null) {
-    return { action, outcome: await collectOutcome(deps) };
+    const outcome = await collectOutcome(deps);
+    return {
+      action: 'account-unverified',
+      sessionExpired: !outcome.ok && outcome.error.kind === 'session',
+    };
   }
   if (
     action !== 'fetch' ||
