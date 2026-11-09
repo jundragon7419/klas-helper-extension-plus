@@ -7,6 +7,11 @@ import {
   KEEPALIVE_PERIOD_MINUTES,
 } from '@/utils/session-keeper';
 
+/** 기다리지 않는 비동기 작업의 실패를 기록한다. 처리되지 않은 rejection으로 남기지 않는다. */
+const logFailure = (what: string) => (error: unknown) => {
+  console.error(`[KLAS Helper Plus] ${what} failed`, error);
+};
+
 export default defineBackground(() => {
   const coordinator = createFetchCoordinator();
 
@@ -59,14 +64,17 @@ export default defineBackground(() => {
 
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== KEEPALIVE_ALARM) return;
-    void keeper.onAlarm().then((result) => {
-      if (import.meta.env.DEV) console.info('[KLAS Helper Plus] 세션 연장', result);
-    });
+    keeper
+      .onAlarm()
+      .then((result) => {
+        if (import.meta.env.DEV) console.info('[KLAS Helper Plus] 세션 연장', result);
+      })
+      .catch(logFailure('session keep-alive'));
   });
 
   // 탭이 닫히면 조회권을 돌려받고 세션 연장 대상에서 뺀다.
   browser.tabs.onRemoved.addListener((tabId) => {
-    void coordinator.releaseTab(tabId);
-    void keeper.removeTab(tabId);
+    coordinator.releaseTab(tabId).catch(logFailure('lease release'));
+    keeper.removeTab(tabId).catch(logFailure('keep-alive tab removal'));
   });
 });

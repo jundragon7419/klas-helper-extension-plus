@@ -39,3 +39,4 @@
 - CI가 `package.json`이나 검사 스크립트가 없을 때 검사를 건너뛰고 통과하던 문제 (#13)
 - `formatRemaining`이 숫자가 아닌 값을 받으면 "NaN일 NaN시간"을 돌려주던 문제. 이제 "알 수 없음" (#20)
 - content script가 storage.session 항목을 불러와 "Access to storage is not allowed from this context" 오류를 내던 문제. background가 아직 준비되지 않았을 때 content script가 멈추던 문제 (#36)
+- 마감 조회 도중 확장 코드에서 예외가 나면 결과를 알리지 않아, 실패가 캐시에 남지 않고 다른 탭이 조회권 만료까지 기다리던 문제. 이제 `unexpected` 실패로 알린다. background에서 기다리지 않는 작업 세 곳의 실패를 기록하고, 조회권 유효 시간을 1분에서 3분으로 늘림 (#41)
