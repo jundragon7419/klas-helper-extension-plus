@@ -1,6 +1,5 @@
 // KLAS 페이지에서 실행되는 content script.
-// 지금은 화면이 없고, 마감을 조회해 캐시에 저장하고 세션 연장 요청을 대신 보낸다.
-// KLAS 탭(마일스톤 2)이 여기에 붙는다.
+// 마감 일정 패널을 띄우고, 마감을 조회하며, 세션 연장 요청을 대신 보낸다.
 
 import { deadlineCache } from '@/utils/deadline-cache';
 import { readAccountHash } from '@/utils/klas/account';
@@ -9,6 +8,7 @@ import { collectDeadlines } from '@/utils/klas/collect-deadlines';
 import { isTabMessage, type ExtensionMessage } from '@/utils/messages';
 import { refreshDeadlines } from '@/utils/refresh-deadlines';
 import { readBackgroundReply, withReceiverRetry } from '@/utils/send-message';
+import { mountDeadlineDrawer } from '@/utils/ui/deadline-drawer';
 
 const send = async (message: ExtensionMessage) =>
   readBackgroundReply(await withReceiverRetry(() => browser.runtime.sendMessage(message)));
@@ -19,6 +19,10 @@ export default defineContentScript({
   async main(ctx) {
     // 로그인한 학생 페이지에서만 동작한다.
     if (!location.pathname.startsWith('/std/')) return;
+
+    void mountDeadlineDrawer(ctx).catch((error: unknown) => {
+      console.warn('[KLAS Helper Plus] 마감 일정 패널을 열지 못했습니다.', error);
+    });
 
     // background가 10분마다 맡기는 세션 연장. KLAS와 같은 출처로 보내야 로그인 쿠키가 실린다.
     const onMessage = (message: unknown, _sender: unknown, sendResponse: (r: unknown) => void) => {
