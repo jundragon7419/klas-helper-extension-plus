@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { applyOutcome, EMPTY_CACHE } from '@/utils/deadline-cache';
 import { parseKlasDate } from '@/utils/date';
 import { KLAS_PATHS } from '@/utils/klas/api';
 import { collectDeadlines } from '@/utils/klas/collect-deadlines';
@@ -70,6 +71,38 @@ describe('collectDeadlines', () => {
     expect(outcome).toMatchObject({ ok: true, snapshot: { deadlines: [] } });
     if (!outcome.ok) return;
     expect(outcome.snapshot.failures).toHaveLength(18);
+  });
+
+  it.each([[['2026-2']], [['2026,9', '2026,1']]])(
+    '지원하지 않는 학기 코드가 섞인 응답 %j는 실패로 처리한다',
+    async (codes) => {
+      const semesters = codes.map((value) => ({
+        value,
+        label: '테스트 학기',
+        subjList: [{ value: 'S1', label: '테스트 과목', name: '테스트 과목' }],
+      }));
+      const fetch = fixtureFetch(() => json(semesters));
+      const previous = await collectDeadlines(now, { fetch: fixtureFetch() });
+      expect(previous.ok).toBe(true);
+      const cache = applyOutcome(EMPTY_CACHE, previous, now);
+
+      const outcome = await collectDeadlines(now, { fetch });
+      expect(outcome).toMatchObject({
+        ok: false,
+        error: { kind: 'schema', path: KLAS_PATHS.semesters },
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(applyOutcome(cache, outcome, now + 1).snapshot).toBe(cache.snapshot);
+    },
+  );
+
+  it('학기 목록이 비어 있으면 빈 결과다', async () => {
+    const fetch = fixtureFetch(() => json([]));
+    await expect(collectDeadlines(now, { fetch })).resolves.toMatchObject({
+      ok: true,
+      snapshot: { semester: null, deadlines: [] },
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('고를 학기가 없으면 빈 결과다 (입학 전)', async () => {
