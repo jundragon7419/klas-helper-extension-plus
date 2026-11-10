@@ -1,7 +1,7 @@
 // KLAS 페이지에서 실행되는 content script.
 // 마감 일정 패널을 띄우고, 마감을 조회하며, 세션 연장 요청을 대신 보낸다.
 
-import { extendSession } from '@/utils/klas/api';
+import { extendSession, fetchSemesters } from '@/utils/klas/api';
 import { isTabMessage, type ExtensionMessage } from '@/utils/messages';
 import { readBackgroundReply, withReceiverRetry } from '@/utils/send-message';
 import { mountDeadlineDrawer } from '@/utils/ui/deadline-drawer';
@@ -29,7 +29,11 @@ export default defineContentScript({
     // background가 10분마다 맡기는 세션 연장. KLAS와 같은 출처로 보내야 로그인 쿠키가 실린다.
     const onMessage = (message: unknown, _sender: unknown, sendResponse: (r: unknown) => void) => {
       if (!isTabMessage(message)) return false;
-      extendSession().then(sendResponse, () => sendResponse(undefined));
+      const result =
+        message.type === 'session/extend'
+          ? extendSession()
+          : fetchSemesters().then((check) => !check.ok && check.error.kind === 'session');
+      result.then(sendResponse, () => sendResponse(undefined));
       return true;
     };
     browser.runtime.onMessage.addListener(onMessage);

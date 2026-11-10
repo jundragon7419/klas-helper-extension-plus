@@ -148,12 +148,25 @@ export function createFetchCoordinator(options: CoordinatorOptions = {}) {
       });
     },
 
-    /** 조회 밖에서 알게 된 실패를 기록한다. 세션 연장 응답이 세션 만료일 때 쓴다. */
-    recordFailure(error: KlasError, fetchScope: string | undefined): Promise<void> {
-      return serial(async () => {
+    /** 늦게 도착한 연장 응답으로 현재 세션을 숨기기 전에 만료를 다시 확인한다. */
+    async recordFailure(
+      error: KlasError,
+      fetchScope: string | undefined,
+      confirmSessionLoss: () => Promise<boolean>,
+    ): Promise<void> {
+      if ((await deadlineCache.getValue()).fetchScope !== fetchScope) return;
+      const checkedAt = now();
+      if (!(await confirmSessionLoss())) return;
+
+      await serial(async () => {
         const cache = await deadlineCache.getValue();
-        if (cache.fetchScope !== fetchScope) return;
-        await deadlineCache.setValue(applyOutcome(cache, { ok: false, error }, now()));
+        if (
+          cache.fetchScope !== fetchScope ||
+          (cache.snapshot && cache.snapshot.checkedAt > checkedAt)
+        ) {
+          return;
+        }
+        await deadlineCache.setValue(applyOutcome(cache, { ok: false, error }, checkedAt));
       });
     },
 

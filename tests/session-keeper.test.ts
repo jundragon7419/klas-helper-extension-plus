@@ -131,7 +131,7 @@ describe('createSessionKeeper', () => {
     await keeper.registerTab(1);
     await keeper.registerTab(2);
     expect(await keeper.onAlarm()).toEqual({ status: 'failed', tabId: 1, error: lost });
-    expect(deps.onSessionLost).toHaveBeenCalledWith(lost, 'scope-a');
+    expect(deps.onSessionLost).toHaveBeenCalledWith(lost, 'scope-a', 1);
     expect(deps.extendInTab).toHaveBeenCalledTimes(1);
   });
 
@@ -149,13 +149,18 @@ describe('세션 만료를 캐시에 기록', () => {
     fakeBrowser.reset();
   });
 
-  it.each(['account-b', 'account-a'])(
-    '이전 연장의 늦은 만료가 %s의 새 캐시를 바꾸지 않는다',
-    async (finalAccount) => {
+  it.each([
+    { finalAccount: 'account-b', switched: true },
+    { finalAccount: 'account-a', switched: true },
+    { finalAccount: 'account-a', switched: false },
+  ])(
+    '이전 연장의 늦은 만료가 $finalAccount 캐시를 바꾸지 않는다 (계정 전환 감지: $switched)',
+    async ({ finalAccount, switched }) => {
       const coordinator = createFetchCoordinator({ now: () => 5 });
       const started = Promise.withResolvers<void>();
       const renewal = Promise.withResolvers<KlasResult<SessionStatus>>();
       const { deps } = setup();
+      const confirm = vi.fn(() => Promise.resolve(false));
       const keeper = createSessionKeeper({
         ...deps,
         readFetchScope: async () => (await deadlineCache.getValue()).fetchScope,
@@ -163,14 +168,15 @@ describe('세션 만료를 캐시에 기록', () => {
           started.resolve();
           return renewal.promise;
         },
-        onSessionLost: (error, fetchScope) => coordinator.recordFailure(error, fetchScope),
+        onSessionLost: (error, fetchScope) => coordinator.recordFailure(error, fetchScope, confirm),
       });
       await coordinator.request(1, 'account-a');
       await keeper.registerTab(1);
 
       const alarm = keeper.onAlarm();
       await started.promise;
-      if (finalAccount === 'account-a') await coordinator.request(2, 'account-b');
+      if (switched && finalAccount === 'account-a') await coordinator.request(2, 'account-b');
+      await coordinator.releaseTab(1);
       const decision = await coordinator.request(2, finalAccount, true);
       if (decision.action !== 'fetch') throw new Error('expected fetch');
       const snapshot = {
@@ -188,6 +194,7 @@ describe('세션 만료를 캐시에 기록', () => {
       renewal.resolve({ ok: false, error: lost });
       await alarm;
 
+      expect(confirm).toHaveBeenCalledTimes(switched ? 0 : 1);
       expect(await deadlineCache.getValue()).toMatchObject({
         accountHash: finalAccount,
         snapshot,
@@ -208,10 +215,44 @@ describe('세션 만료를 캐시에 기록', () => {
       };
       const cache = { snapshot, lastError: null, ...(fetchScope && { fetchScope }) };
       await deadlineCache.setValue(cache);
-      await createFetchCoordinator({ now: () => 5 }).recordFailure(lost, fetchScope);
+      await createFetchCoordinator({ now: () => 5 }).recordFailure(lost, fetchScope, () =>
+        Promise.resolve(true),
+      );
       expect(await deadlineCache.getValue()).toEqual({ ...cache, lastError: { ...lost, at: 5 } });
     },
   );
+
+  it('만료 재확인 뒤 시작한 조회가 먼저 성공하면 새 캐시를 숨기지 않는다', async () => {
+    let now = 5;
+    const coordinator = createFetchCoordinator({ now: () => now });
+    await coordinator.request(1, 'account-a');
+    const { fetchScope } = await deadlineCache.getValue();
+    const started = Promise.withResolvers<void>();
+    const confirmation = Promise.withResolvers<boolean>();
+    const confirm = vi.fn(() => {
+      started.resolve();
+      return confirmation.promise;
+    });
+    const loss = coordinator.recordFailure(lost, fetchScope, confirm);
+    await Promise.race([started.promise, loss]);
+    expect(confirm).toHaveBeenCalledOnce();
+
+    now = 6;
+    const decision = await coordinator.request(1, 'account-a', true);
+    if (decision.action !== 'fetch') throw new Error('expected fetch');
+    const snapshot = {
+      semester: '2026,2',
+      checkedAt: now,
+      deadlines: [],
+      skipped: [],
+      failures: [],
+    };
+    await coordinator.report(1, decision.leaseId, 'account-a', 'account-a', { ok: true, snapshot });
+    confirmation.resolve(true);
+    await loss;
+
+    expect(await deadlineCache.getValue()).toMatchObject({ snapshot, lastError: null });
+  });
 });
 
 describe('extendSession', () => {

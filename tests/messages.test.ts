@@ -15,8 +15,8 @@ describe('isExtensionMessage', () => {
 });
 
 describe('isTabMessage', () => {
-  it('session/extend를 허용한다', () => {
-    expect(isTabMessage({ type: 'session/extend' })).toBe(true);
+  it.each(['session/extend', 'session/confirm-expiry'])('%s를 허용한다', (type) => {
+    expect(isTabMessage({ type })).toBe(true);
   });
 
   it.each([{ type: 'klas/opened' }, { type: 'unknown' }, {}, null, 'session/extend'])(
