@@ -35,6 +35,7 @@ function setup(answers: Record<number, KlasResult<SessionStatus> | 'gone'> = {})
       alarm = false;
       return Promise.resolve();
     }),
+    readFetchScope: vi.fn(() => Promise.resolve('scope-a')),
     onSessionLost: vi.fn(() => Promise.resolve()),
   };
   return { deps, keeper: createSessionKeeper(deps), hasAlarm: () => alarm };
@@ -130,7 +131,7 @@ describe('createSessionKeeper', () => {
     await keeper.registerTab(1);
     await keeper.registerTab(2);
     expect(await keeper.onAlarm()).toEqual({ status: 'failed', tabId: 1, error: lost });
-    expect(deps.onSessionLost).toHaveBeenCalledWith(lost);
+    expect(deps.onSessionLost).toHaveBeenCalledWith(lost, 'scope-a');
     expect(deps.extendInTab).toHaveBeenCalledTimes(1);
   });
 
@@ -148,12 +149,69 @@ describe('세션 만료를 캐시에 기록', () => {
     fakeBrowser.reset();
   });
 
-  it('recordFailure는 이전 결과를 두고 "로그인 필요"만 남긴다', async () => {
-    const snapshot = { semester: '2026,2', checkedAt: 1, deadlines: [], skipped: [], failures: [] };
-    await deadlineCache.setValue({ snapshot, lastError: null });
-    await createFetchCoordinator({ now: () => 5 }).recordFailure(lost);
-    expect(await deadlineCache.getValue()).toEqual({ snapshot, lastError: { ...lost, at: 5 } });
-  });
+  it.each(['account-b', 'account-a'])(
+    '이전 연장의 늦은 만료가 %s의 새 캐시를 바꾸지 않는다',
+    async (finalAccount) => {
+      const coordinator = createFetchCoordinator({ now: () => 5 });
+      const started = Promise.withResolvers<void>();
+      const renewal = Promise.withResolvers<KlasResult<SessionStatus>>();
+      const { deps } = setup();
+      const keeper = createSessionKeeper({
+        ...deps,
+        readFetchScope: async () => (await deadlineCache.getValue()).fetchScope,
+        extendInTab: () => {
+          started.resolve();
+          return renewal.promise;
+        },
+        onSessionLost: (error, fetchScope) => coordinator.recordFailure(error, fetchScope),
+      });
+      await coordinator.request(1, 'account-a');
+      await keeper.registerTab(1);
+
+      const alarm = keeper.onAlarm();
+      await started.promise;
+      if (finalAccount === 'account-a') await coordinator.request(2, 'account-b');
+      const decision = await coordinator.request(2, finalAccount, true);
+      if (decision.action !== 'fetch') throw new Error('expected fetch');
+      const snapshot = {
+        semester: '2026,2',
+        checkedAt: 5,
+        deadlines: [],
+        skipped: [],
+        failures: [],
+      };
+      await coordinator.report(2, decision.leaseId, finalAccount, finalAccount, {
+        ok: true,
+        snapshot,
+      });
+
+      renewal.resolve({ ok: false, error: lost });
+      await alarm;
+
+      expect(await deadlineCache.getValue()).toMatchObject({
+        accountHash: finalAccount,
+        snapshot,
+        lastError: null,
+      });
+    },
+  );
+
+  it.each([undefined, 'scope-a'])(
+    '같은 범위 %s의 만료는 이전 결과를 두고 기록한다',
+    async (fetchScope) => {
+      const snapshot = {
+        semester: '2026,2',
+        checkedAt: 1,
+        deadlines: [],
+        skipped: [],
+        failures: [],
+      };
+      const cache = { snapshot, lastError: null, ...(fetchScope && { fetchScope }) };
+      await deadlineCache.setValue(cache);
+      await createFetchCoordinator({ now: () => 5 }).recordFailure(lost, fetchScope);
+      expect(await deadlineCache.getValue()).toEqual({ ...cache, lastError: { ...lost, at: 5 } });
+    },
+  );
 });
 
 describe('extendSession', () => {

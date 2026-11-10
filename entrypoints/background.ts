@@ -1,3 +1,4 @@
+import { deadlineCache } from '@/utils/deadline-cache';
 import { createFetchCoordinator } from '@/utils/fetch-coordinator';
 import type { KlasResult, SessionStatus } from '@/utils/klas/api';
 import { isExtensionMessage, type ExtensionMessage, type TabMessage } from '@/utils/messages';
@@ -33,7 +34,8 @@ export default defineBackground(() => {
     clearAlarm: async () => {
       await browser.alarms.clear(KEEPALIVE_ALARM);
     },
-    onSessionLost: (error) => coordinator.recordFailure(error),
+    readFetchScope: async () => (await deadlineCache.getValue()).fetchScope,
+    onSessionLost: (error, fetchScope) => coordinator.recordFailure(error, fetchScope),
   });
 
   const handle = (message: ExtensionMessage, tabId: number): Promise<unknown> => {
