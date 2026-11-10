@@ -9,6 +9,7 @@ import {
   type Deadline,
   type SubjectLists,
 } from '@/utils/klas/deadlines';
+import { deadlineDisplay } from '@/utils/ui/deadline-display';
 import type { KlasOnlineRow, KlasSemester, KlasTaskRow } from '@/utils/klas/schema';
 import fixture from './fixtures/klas/2026-2.json';
 
@@ -75,6 +76,31 @@ describe('normalizeSubject: 과제와 팀 프로젝트', () => {
     });
     expect(deadlines[0]).toMatchObject({ id: 'task:S1:3', done: true, extended: false });
   });
+
+  it.each(['task', 'project'] as const)(
+    '읽을 수 없는 %s 추가 기한은 부분 실패로 표시한다',
+    (kind) => {
+      const normalized = normalizeSubject({
+        ...base,
+        lists: { [kind]: [task({ reexpiredate: '2026/11/14 23:59:59' })] },
+      });
+      const snapshot = {
+        ...normalized,
+        semester: base.semester,
+        checkedAt: base.now,
+        failures: [],
+      };
+      const cache = { snapshot, lastError: null };
+      const before = deadlineDisplay(cache, false, base.now);
+      expect(before.groups[0]?.items).toHaveLength(1);
+      expect(before.message).toBe('일부 마감을 확인하지 못했습니다');
+
+      const after = deadlineDisplay(cache, false, at('2026-11-11 00:00:00'));
+      expect(after.groups).toEqual([]);
+      expect(after.message).toBe('일부 마감을 확인하지 못했습니다');
+      expect(JSON.stringify(snapshot.skipped)).not.toContain('2026/11/14');
+    },
+  );
 
   it('원래 기한 안이면 원래 기한이 마감이다', () => {
     const row = task({ reexpiredate: '2026-11-14 23:59:59' });
