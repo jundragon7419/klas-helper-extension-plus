@@ -65,7 +65,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
  * 로그인 페이지로 넘어간 응답인지 본다. KLAS는 세션이 끊기면 HTTP 200과 로그인 페이지(LoginForm.do)를 준다.
  * UpdateSession.do도 /usr/cmn/login/ 아래에 있으므로 경로 전체가 아니라 LoginForm.do로 판단한다.
  */
-function isLoginPage(response: Response): boolean {
+export function isLoginPage(response: Response): boolean {
   return /\/usr\/cmn\/login\/LoginForm\.do/i.test(response.url);
 }
 
