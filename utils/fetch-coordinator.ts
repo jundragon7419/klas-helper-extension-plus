@@ -149,9 +149,10 @@ export function createFetchCoordinator(options: CoordinatorOptions = {}) {
     },
 
     /** 조회 밖에서 알게 된 실패를 기록한다. 세션 연장 응답이 세션 만료일 때 쓴다. */
-    recordFailure(error: KlasError): Promise<void> {
+    recordFailure(error: KlasError, fetchScope: string | undefined): Promise<void> {
       return serial(async () => {
         const cache = await deadlineCache.getValue();
+        if (cache.fetchScope !== fetchScope) return;
         await deadlineCache.setValue(applyOutcome(cache, { ok: false, error }, now()));
       });
     },
