@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseKlasDate } from '@/utils/date';
+import { isFresh } from '@/utils/deadline-cache';
 import {
   LIST_PAGES,
   normalizeSubject,
@@ -91,6 +92,48 @@ describe('normalizeSubject: 과제와 팀 프로젝트', () => {
     const row = task({ expiredate: '2026-11-05 23:59:59' });
     const { deadlines } = normalizeSubject({ ...base, lists: { task: [row] } });
     expect(deadlines[0]).toMatchObject({ dueAt: at('2026-11-05 23:59:59'), extended: false });
+  });
+
+  it('캐시된 과제와 팀 프로젝트를 재조회 없이 추가 제출 기한으로 전환한다', () => {
+    const original = at('2026-11-10 23:59:59');
+    const extra = at('2026-11-14 23:59:59');
+    const row = task({ reexpiredate: '2026-11-14 23:59:59' });
+    const { deadlines } = normalizeSubject({
+      ...base,
+      lists: {
+        task: [row, task({ title: '제출한 과제', submityn: 'Y', reexpiredate: row.reexpiredate })],
+        project: [row],
+      },
+    });
+    const cached = structuredClone(deadlines);
+    expect(pendingDeadlines(cached, original)).toHaveLength(2);
+    expect(pendingDeadlines(cached, original + 1)).toEqual([
+      expect.objectContaining({ kind: 'task', dueAt: extra, extended: true }),
+      expect.objectContaining({ kind: 'project', dueAt: extra, extended: true }),
+    ]);
+    expect(pendingDeadlines(cached, extra)).toHaveLength(2);
+    expect(pendingDeadlines(cached, extra + 1)).toEqual([]);
+    expect(cached).toEqual(deadlines);
+  });
+
+  it('이전 캐시는 저장된 마감으로 표시하되 다음 조회에서 갱신한다', () => {
+    const { deadlines } = normalizeSubject({ ...base, lists: { task: [task()] } });
+    const item = deadlines[0]!;
+    const cache = {
+      snapshot: {
+        semester: base.semester,
+        checkedAt: base.now,
+        deadlines,
+        skipped: [],
+        failures: [],
+      },
+      lastError: null,
+    };
+    expect(isFresh(cache, base.now)).toBe(true);
+
+    delete item.submissionWindow;
+    expect(pendingDeadlines(deadlines, base.now)).toEqual([item]);
+    expect(isFresh(cache, base.now)).toBe(false);
   });
 
   it('팀 프로젝트의 UTC 표기 마감도 같은 규칙으로 읽는다', () => {

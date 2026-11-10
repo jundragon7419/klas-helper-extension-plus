@@ -66,5 +66,10 @@ export function isFresh(cache: DeadlineCache, now: number): boolean {
     return true;
   }
   if (lastError) return false;
-  return snapshot !== null && now - snapshot.checkedAt < FRESH_FOR_MS;
+  if (snapshot === null || now - snapshot.checkedAt >= FRESH_FOR_MS) return false;
+  // 이전 캐시의 과제와 팀 프로젝트에는 추가 제출 기한을 다시 계산할 정보가 없다.
+  return !snapshot.deadlines.some(
+    (item) =>
+      (item.kind === 'task' || item.kind === 'project') && item.submissionWindow === undefined,
+  );
 }

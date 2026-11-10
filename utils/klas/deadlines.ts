@@ -31,6 +31,8 @@ export interface Deadline {
   done: boolean;
   /** 원래 기한이 지나 추가 제출 기한을 마감으로 쓰는지 (과제, 팀 프로젝트) */
   extended: boolean;
+  /** 과제와 팀 프로젝트의 제출 기한. 이전 캐시에는 이 필드가 없다. */
+  submissionWindow?: { originalDueAt: number; extraDueAt: number } | null;
   /** KLAS에서 이 항목이 있는 목록 페이지 */
   listPage: string;
 }
@@ -84,7 +86,9 @@ export function normalizeSubject({
   const add = (
     kind: DeadlineKind,
     key: string,
-    fields: Pick<Deadline, 'title' | 'startsAt' | 'done' | 'extended'> & { dueAt: number | null },
+    fields: Pick<Deadline, 'title' | 'startsAt' | 'done' | 'extended' | 'submissionWindow'> & {
+      dueAt: number | null;
+    },
     rawDue: string,
   ) => {
     if (fields.dueAt === null) {
@@ -139,6 +143,10 @@ export function normalizeSubject({
           dueAt: extended ? extra : original,
           done: row.submityn === 'Y',
           extended,
+          submissionWindow:
+            original !== null && extra !== null
+              ? { originalDueAt: original, extraDueAt: extra }
+              : null,
         },
         row.expiredate,
       );
@@ -176,5 +184,17 @@ export function sortByDue(deadlines: readonly Deadline[]): Deadline[] {
 
 /** 아직 하지 않았고 마감이 지나지 않은 항목만 마감 순으로 돌려준다. */
 export function pendingDeadlines(deadlines: readonly Deadline[], now: number): Deadline[] {
-  return sortByDue(deadlines.filter((d) => !d.done && d.dueAt >= now));
+  const pending: Deadline[] = [];
+  for (const item of deadlines) {
+    if (item.done) continue;
+    const window = item.submissionWindow;
+    const extended = window ? now > window.originalDueAt : item.extended;
+    const dueAt = window ? (extended ? window.extraDueAt : window.originalDueAt) : item.dueAt;
+    if (dueAt >= now) {
+      pending.push(
+        dueAt === item.dueAt && extended === item.extended ? item : { ...item, dueAt, extended },
+      );
+    }
+  }
+  return sortByDue(pending);
 }
