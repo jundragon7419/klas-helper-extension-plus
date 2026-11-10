@@ -44,8 +44,19 @@ export function DeadlinePanel({ cache, checking, open, onRefresh }: DeadlinePane
             ? '아직 확인한 기록이 없습니다'
             : `마지막 확인 ${checkedTime.format(checkedAt)}`}
         </span>
-        <button type="button" class="deadline-refresh" disabled={checking} onClick={onRefresh}>
-          다시 확인
+        <button
+          type="button"
+          class="deadline-refresh"
+          aria-label="다시 확인"
+          title="다시 확인"
+          aria-disabled={checking}
+          onClick={() => {
+            if (!checking) onRefresh();
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 4v5h-5M20 9a8 8 0 1 0 .4 5" />
+          </svg>
         </button>
       </div>
       <div role="status">

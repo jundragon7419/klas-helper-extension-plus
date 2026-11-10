@@ -226,11 +226,15 @@ button svg {
 }
 
 .deadline-refresh {
-  min-height: var(--khp-size-target-min);
+  display: grid;
+  place-items: center;
+  width: var(--khp-size-target-min);
+  height: var(--khp-size-target-min);
+  padding: 0;
   flex-shrink: 0;
 }
 
-.deadline-refresh:disabled {
+.deadline-refresh[aria-disabled='true'] {
   color: var(--khp-color-text-muted);
   cursor: default;
 }
@@ -284,7 +288,7 @@ button svg {
 }
 
 .deadline-item:hover,
-.deadline-refresh:enabled:hover,
+.deadline-refresh[aria-disabled='false']:hover,
 .deadline-login:hover {
   background: var(--khp-color-surface-hover);
 }

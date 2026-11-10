@@ -21,7 +21,6 @@ export function useDeadlineList(ctx: ContentScriptContext, send: RefreshDeps['se
       if (inFlight.current || ctx.isInvalid) return;
       inFlight.current = true;
       setChecking(true);
-      setAccountHash(null);
       setLocal(null);
 
       let verifiedCache = EMPTY_CACHE;
