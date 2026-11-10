@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KLAS Helper+ 디자인 토큰 미리보기</title>
+    <link rel="stylesheet" href="./preview.css" />
+  </head>
+  <body>
+    <header class="pv-top">
+      <div class="pv-brand">
+        <b>KLAS Helper+</b>
+        <span>디자인 토큰 미리보기</span>
+      </div>
+      <div class="pv-actions">
+        <span id="changed" class="pv-changed" role="status"></span>
+        <button type="button" id="reset" class="pv-btn">처음 값으로</button>
+        <button type="button" id="save" class="pv-btn pv-btn-primary">tokens.ts에 저장</button>
+      </div>
+    </header>
+    <p id="message" class="pv-message" role="status" hidden></p>
+
+    <main class="pv-wrap">
+      <section>
+        <h2>견본</h2>
+        <p class="pv-hint">
+          아래 값을 바꾸면 견본이 바로 바뀝니다. 고친 값은 이 브라우저에 임시로 남고, "tokens.ts에
+          저장"을 눌러야 파일에 들어갑니다.
+        </p>
+        <div class="pv-sample-grid">
+          <div class="pv-sample-frame">
+            <aside class="s-drawer" aria-label="마감 일정 견본">
+              <div class="s-brand">
+                <span class="s-brand-title">KLAS Helper+</span>
+                <button
+                  type="button"
+                  class="s-icon-btn s-icon-btn-brand"
+                  aria-label="마감 일정 닫기"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m6 6 12 12M18 6 6 18" />
+                  </svg>
+                </button>
+              </div>
+              <div class="s-tabs" role="tablist" aria-label="KLAS Helper+ 기능">
+                <button type="button" class="s-tab is-active" role="tab" aria-selected="true">
+                  마감 일정
+                </button>
+              </div>
+              <div class="s-meta">
+                <span>마지막 확인 11월 9일 15:00</span>
+                <button type="button" class="s-btn s-btn-secondary">다시 확인</button>
+              </div>
+              <div class="s-banner s-banner-warning" role="alert">
+                <strong>일부 마감을 확인하지 못했습니다</strong>
+                확인한 항목만 표시합니다.
+              </div>
+              <h4 class="s-group">11월 9일 (월) <span>2개</span></h4>
+              <a class="s-item" href="#">
+                <span class="s-item-body">
+                  <span class="s-item-meta"><span class="s-kind">과제</span>자료구조</span>
+                  <span class="s-item-title">3주차 연결 리스트 구현</span>
+                  <span class="s-item-due">23:59</span>
+                </span>
+                <span class="s-left s-left-urgent">8시간 남음</span>
+              </a>
+              <a class="s-item s-item-hover" href="#">
+                <span class="s-item-body">
+                  <span class="s-item-meta"><span class="s-kind">강의</span>운영체제</span>
+                  <span class="s-item-title">9주차 2차시 프로세스 동기화 (마우스 올림)</span>
+                  <span class="s-item-due">23:59</span>
+                </span>
+                <span class="s-left s-left-urgent">8시간 남음</span>
+              </a>
+              <h4 class="s-group">11월 10일 (화) <span>1개</span></h4>
+              <a class="s-item" href="#">
+                <span class="s-item-body">
+                  <span class="s-item-meta"><span class="s-kind">퀴즈</span>확률과 통계</span>
+                  <span class="s-item-title">중간 점검 퀴즈</span>
+                  <span class="s-item-due">18:00</span>
+                </span>
+                <span class="s-left">1일 3시간 남음</span>
+              </a>
+              <h4 class="s-group">11월 12일 (목) <span>1개</span></h4>
+              <a class="s-item" href="#">
+                <span class="s-item-body">
+                  <span class="s-item-meta"><span class="s-kind">과제</span>컴퓨터네트워크</span>
+                  <span class="s-item-title">소켓 프로그래밍 실습</span>
+                  <span class="s-item-due">23:59 <span class="s-extended">연장 기간</span></span>
+                </span>
+                <span class="s-left">3일 8시간 남음</span>
+              </a>
+            </aside>
+          </div>
+
+          <div class="pv-sample-side">
+            <div class="pv-card">
+              <div class="pv-lbl">손잡이 (기본, 마우스 올림, 포커스, 패널 열림)</div>
+              <div class="s-handle-row">
+                <button type="button" class="s-handle" aria-label="마감 일정 열기">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+                </button>
+                <button type="button" class="s-handle s-handle-hover" aria-label="마감 일정 열기">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+                </button>
+                <button type="button" class="s-handle s-handle-focus" aria-label="마감 일정 열기">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+                </button>
+                <button type="button" class="s-handle" aria-label="손잡이로 마감 일정 닫기">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="pv-card">
+              <div class="pv-lbl">KLAS 안 요소의 (+) 표시 (KLAS 스타일을 그대로 흉내 낸 견본)</div>
+              <div class="s-klas-header">
+                <span>[이름]([학번])</span>
+                <span>자동 연장 중<sup class="s-mark s-mark-dark" aria-hidden="true">+</sup></span>
+              </div>
+              <ul class="s-klas-menu">
+                <li><a href="#">수강신청 프로그램</a></li>
+                <li>
+                  <a href="#"
+                    >마감 일정<sup class="s-mark s-mark-light" aria-hidden="true">+</sup></a
+                  >
+                </li>
+                <li><a href="#">수강포기 신청</a></li>
+              </ul>
+            </div>
+            <div class="pv-card">
+              <div class="pv-lbl">마감 일정 상태</div>
+              <p class="s-banner s-banner-info">마감 일정을 확인하는 중입니다</p>
+              <p class="s-banner s-banner-info">아직 확인한 기록이 없습니다</p>
+              <p class="s-banner s-banner-info">남은 마감이 없습니다</p>
+              <p class="s-banner s-banner-info">KLAS 로그인이 필요합니다</p>
+              <p class="s-banner s-banner-warning">마감 일정을 확인하지 못했습니다</p>
+              <div class="s-btn-row">
+                <a class="s-btn s-btn-primary" href="#">KLAS 로그인 화면으로</a>
+                <button type="button" class="s-btn s-btn-secondary">다시 확인</button>
+              </div>
+              <div class="s-banner s-banner-info" role="status">
+                새로 확인하지 못했습니다. 저장된 목록을 보여 줍니다.
+              </div>
+            </div>
+            <div class="pv-card">
+              <div class="pv-lbl">서랍 움직임 (duration, easing)</div>
+              <div class="s-motion-track">
+                <div class="s-motion-panel" id="motionPanel"></div>
+              </div>
+              <button type="button" id="motionPlay" class="pv-btn">열고 닫기 보기</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>대비 검사</h2>
+        <p class="pv-hint">
+          글자는 4.5:1, 포커스 테두리처럼 글자가 아닌 요소는 3:1 이상이어야 합니다. 같은 목록을
+          <code>tests/tokens.test.ts</code>가 검사합니다.
+        </p>
+        <div id="contrast" class="pv-table"></div>
+      </section>
+
+      <section>
+        <h2>색</h2>
+        <div id="colors" class="pv-grid"></div>
+      </section>
+
+      <section>
+        <h2>글자</h2>
+        <div id="type"></div>
+      </section>
+
+      <section>
+        <h2>간격, 모서리, 크기</h2>
+        <div id="metrics"></div>
+      </section>
+
+      <section>
+        <h2>그림자, 겹침, 움직임</h2>
+        <div id="effects"></div>
+      </section>
+
+      <section>
+        <h2>만들어지는 CSS</h2>
+        <p class="pv-hint">
+          shadow root 맨 앞에 들어가는 내용입니다. 실제로는 <code>:host</code>에 붙고
+          <code>all: initial</code>이 함께 들어갑니다.
+        </p>
+        <pre id="css" class="pv-pre"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

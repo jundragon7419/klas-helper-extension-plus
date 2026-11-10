@@ -1,0 +1,9 @@
+.output/
+.wxt/
+node_modules/
+coverage/
+local-data/
+package-lock.json
+
+# 마크다운 문서는 Prettier를 적용하지 않는다
+*.md
