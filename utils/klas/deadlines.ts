@@ -127,6 +127,13 @@ export function normalizeSubject({
     for (const [index, row] of (lists[kind] ?? []).entries()) {
       const original = parseKlasDate(row.expiredate);
       const extra = parseKlasDate(row.reexpiredate);
+      if (original !== null && extra === null && row.reexpiredate?.trim()) {
+        skipped.push({
+          kind,
+          subjectCode: subject.value,
+          reason: '추가 제출 기한을 읽을 수 없음',
+        });
+      }
       const extended = original !== null && extra !== null && now > original;
       add(kind, rowKey(kind === 'task' ? row.taskNo : row.ordseq, index), {
         title: row.title,
