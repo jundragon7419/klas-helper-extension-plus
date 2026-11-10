@@ -52,6 +52,42 @@ describe('applyOutcome', () => {
   });
 });
 
+describe('이전 캐시의 진단 정리', () => {
+  const marker = 'synthetic-private-value';
+  const previous: DeadlineCache = {
+    snapshot: {
+      ...snapshot(T0),
+      failures: [
+        { kind: 'schema', path: '/x.do', message: `task[0].title: 형식이 다름 (${marker})` },
+        { kind: 'schema', path: '/y.do', message: 'quiz[0].edt: 문자열 필요' },
+      ],
+      skipped: [{ kind: 'task', subjectCode: 'S1', reason: `마감 날짜를 읽을 수 없음: ${marker}` }],
+    },
+    lastError: { kind: 'not-json', path: '/x.do', message: `JSON이 아닌 응답 (${marker})`, at: T0 },
+  };
+
+  it('조회가 실패해도 이전 마감 결과는 유지하고 진단 원문은 제거한다', () => {
+    const updated = applyOutcome(previous, failure('network'), T0 + 1);
+    expect(updated.snapshot?.checkedAt).toBe(T0);
+    expect(updated.snapshot?.failures.map((error) => error.message)).toEqual([
+      'task[0].title: 형식이 다름',
+      'quiz[0].edt: 문자열 필요',
+    ]);
+    expect(JSON.stringify(updated)).not.toContain(marker);
+    expect(JSON.stringify(previous)).toContain(marker);
+  });
+
+  it('늦은 성공으로 최근 실패를 유지할 때 헤더 원문은 제거한다', () => {
+    const updated = applyOutcome(previous, success(T0 - 1), T0 + 1);
+    expect(updated.lastError).toEqual({
+      kind: 'not-json',
+      path: '/x.do',
+      message: 'JSON이 아닌 응답',
+      at: T0,
+    });
+  });
+});
+
 describe('isFresh', () => {
   it('5분 안에 성공한 결과가 있으면 다시 조회하지 않는다', () => {
     const cache = { snapshot: snapshot(T0), lastError: null };

@@ -116,7 +116,7 @@ async function klasRequest(
 
   const contentType = response.headers.get('content-type') ?? '';
   if (!/\bjson\b/i.test(contentType)) {
-    return fail('not-json', path, `JSON이 아닌 응답 (${contentType || 'content-type 없음'})`);
+    return fail('not-json', path, 'JSON이 아닌 응답');
   }
 
   try {
