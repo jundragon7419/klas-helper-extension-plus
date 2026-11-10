@@ -3,6 +3,8 @@
 // 확장이 쓰는 필드만 확인하고 나머지는 무시한다. KLAS가 필드를 더하는 것은 괜찮고,
 // 쓰는 필드가 없어지거나 형식이 바뀌면 "schema" 실패로 알린다.
 
+import { parseSemester } from './semester';
+
 /** 학기별 수강 과목 */
 export interface KlasSemester {
   /** 예: "2026,2" */
@@ -126,9 +128,12 @@ export function checkSemesters(data: unknown): SchemaResult<KlasSemester[]> {
   let mismatch = describeRowsMismatch(data, () => SEMESTER_SHAPE, 'semesters');
   if (mismatch === null && Array.isArray(data)) {
     for (const [index, semester] of data.entries()) {
-      const subjects = (semester as Record<string, unknown>).subjList;
+      const { value, subjList } = semester as KlasSemester;
+      if (parseSemester(value) === null) {
+        return { ok: false, reason: `semesters[${index}].value: 지원하지 않는 학기 코드` };
+      }
       mismatch = describeRowsMismatch(
-        subjects,
+        subjList,
         () => SUBJECT_SHAPE,
         `semesters[${index}].subjList`,
       );
