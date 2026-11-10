@@ -58,8 +58,7 @@ describe('content script가 불러오는 모듈', () => {
     expect(modules).toContain('../utils/ui/deadline-drawer.tsx');
     expect(modules).toContain('../utils/deadline-cache.ts');
     expect(modules).toContain('../utils/klas/api.ts');
-    // 타입으로만 불러오는 모듈은 빠진다.
-    expect(modules).not.toContain('../utils/fetch-coordinator.ts');
+    expect(modules).not.toContain('../utils/session-keeper.ts');
   });
 
   it('storage.session 항목을 정의하지 않는다', () => {
