@@ -74,11 +74,11 @@ describe('마감 일정 표시', () => {
     ).toBe('일부 마감을 확인하지 못했습니다');
   });
 
-  it('전체 조회 실패는 이전 결과가 있을 때만 저장된 목록을 표시한다', () => {
+  it('전체 조회 실패는 이전 결과가 있을 때만 이전 목록을 표시한다', () => {
     const lastError = { kind: 'unexpected' as const, at: now, path: '', message: '' };
     const previous = deadlineDisplay({ ...cache, lastError }, false, now);
     expect(previous.groups[0]?.items).toEqual([deadline]);
-    expect(previous.message).toBe('새로 확인하지 못했습니다. 저장된 목록을 보여 줍니다');
+    expect(previous.message).toBe('새로 확인하지 못했습니다. 이전 목록을 보여 줍니다');
     expect(deadlineDisplay({ snapshot: null, lastError }, false, now).message).toBe(
       '마감 일정을 확인하지 못했습니다',
     );

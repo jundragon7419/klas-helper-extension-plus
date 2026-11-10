@@ -1,7 +1,5 @@
-import { deadlineCache } from '@/utils/deadline-cache';
-import { createFetchCoordinator } from '@/utils/fetch-coordinator';
 import type { KlasResult, SessionStatus } from '@/utils/klas/api';
-import { isExtensionMessage, type ExtensionMessage, type TabMessage } from '@/utils/messages';
+import { isExtensionMessage, type TabMessage } from '@/utils/messages';
 import {
   createSessionKeeper,
   KEEPALIVE_ALARM,
@@ -14,8 +12,6 @@ const logFailure = (what: string) => (error: unknown) => {
 };
 
 export default defineBackground(() => {
-  const coordinator = createFetchCoordinator();
-
   const keeper = createSessionKeeper({
     async extendInTab(tabId) {
       const message: TabMessage = { type: 'session/extend' };
@@ -34,37 +30,14 @@ export default defineBackground(() => {
     clearAlarm: async () => {
       await browser.alarms.clear(KEEPALIVE_ALARM);
     },
-    readFetchScope: async () => (await deadlineCache.getValue()).fetchScope,
-    onSessionLost: (error, fetchScope, tabId) =>
-      coordinator.recordFailure(error, fetchScope, async () => {
-        const message: TabMessage = { type: 'session/confirm-expiry' };
-        try {
-          return (await browser.tabs.sendMessage<TabMessage, boolean>(tabId, message)) === true;
-        } catch {
-          // 탭이 닫히거나 이동했다면 현재 세션의 만료 여부를 확인할 수 없다.
-          return false;
-        }
-      }),
   });
 
-  const handle = (message: ExtensionMessage, tabId: number): Promise<unknown> => {
-    switch (message.type) {
-      case 'klas/opened':
-        return keeper.registerTab(tabId);
-      case 'deadlines/request':
-        return coordinator.request(tabId, message.accountHash ?? null, message.force ?? false);
-      case 'deadlines/report':
-        return coordinator.report(
-          tabId,
-          message.leaseId,
-          message.accountHash,
-          message.verifiedAccountHash,
-          message.outcome,
-        );
-    }
-  };
-
   browser.runtime.onInstalled.addListener(({ reason }) => {
+    if (reason === 'update') {
+      storage
+        .removeItem('local:deadlineCache', { removeMeta: true })
+        .catch(logFailure('old deadline cache removal'));
+    }
     console.log(`[KLAS Helper Plus] installed (${reason})`);
   });
 
@@ -72,8 +45,8 @@ export default defineBackground(() => {
     const tabId = sender.tab?.id;
     if (!isExtensionMessage(message) || tabId === undefined) return false;
     // Chrome과 Firefox 모두에서 비동기로 답하려고 sendResponse를 쓰고 true를 돌려준다.
-    handle(message, tabId).then(
-      (data) => sendResponse({ ok: true, data }),
+    keeper.registerTab(tabId).then(
+      () => sendResponse({ ok: true }),
       (error: unknown) => {
         console.error('[KLAS Helper Plus] message failed', error);
         sendResponse({
@@ -95,9 +68,8 @@ export default defineBackground(() => {
       .catch(logFailure('session keep-alive'));
   });
 
-  // 탭이 닫히면 조회권을 돌려받고 세션 연장 대상에서 뺀다.
+  // 탭이 닫히면 세션 연장 대상에서 뺀다.
   browser.tabs.onRemoved.addListener((tabId) => {
-    coordinator.releaseTab(tabId).catch(logFailure('lease release'));
     keeper.removeTab(tabId).catch(logFailure('keep-alive tab removal'));
   });
 });

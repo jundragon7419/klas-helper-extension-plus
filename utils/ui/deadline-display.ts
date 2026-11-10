@@ -49,7 +49,7 @@ export function deadlineDisplay(cache: DeadlineCache, checking: boolean, now: nu
   else if (checking) message = '마감 일정을 확인하는 중입니다';
   else if (lastError) {
     message = snapshot
-      ? '새로 확인하지 못했습니다. 저장된 목록을 보여 줍니다'
+      ? '새로 확인하지 못했습니다. 이전 목록을 보여 줍니다'
       : '마감 일정을 확인하지 못했습니다';
   } else if (!snapshot) message = '아직 확인한 기록이 없습니다';
   else if (snapshot.failures.length || snapshot.skipped.length)

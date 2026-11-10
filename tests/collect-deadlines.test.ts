@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { applyOutcome, deadlineCache, EMPTY_CACHE } from '@/utils/deadline-cache';
 import { parseKlasDate } from '@/utils/date';
 import { KLAS_PATHS } from '@/utils/klas/api';
 import { collectDeadlines } from '@/utils/klas/collect-deadlines';
+import { refreshDeadlines } from '@/utils/refresh-deadlines';
 import { fixtureFetch, json, loginPage } from './helpers/klas-fetch';
 
 const now = parseKlasDate('2026-11-06 12:00')!;
@@ -50,7 +50,7 @@ describe('collectDeadlines', () => {
     expect(outcome.snapshot.deadlines).toHaveLength(19 + 14 + 2);
   });
 
-  it('형식 오류는 원본 응답 값 없이 로컬 캐시에 저장한다', async () => {
+  it('형식 오류에 원본 응답 값을 남기지 않는다', async () => {
     const marker = 'synthetic-private-field';
     const fetch = fixtureFetch((path) =>
       path === KLAS_PATHS.task ? json([{ title: { marker } }]) : undefined,
@@ -63,14 +63,7 @@ describe('collectDeadlines', () => {
       message: 'task[0].title: 문자열 필요',
     });
 
-    await deadlineCache.setValue(applyOutcome(EMPTY_CACHE, outcome, now));
-    try {
-      const saved = await deadlineCache.getValue();
-      expect(saved.snapshot?.failures[0]?.message).toBe('task[0].title: 문자열 필요');
-      expect(JSON.stringify(saved)).not.toContain(marker);
-    } finally {
-      await deadlineCache.removeValue();
-    }
+    expect(JSON.stringify(outcome)).not.toContain(marker);
   });
 
   it('모든 마감 목록의 조회가 실패하면 전체 실패다', async () => {
@@ -106,8 +99,7 @@ describe('collectDeadlines', () => {
       }));
       const fetch = fixtureFetch(() => json(semesters));
       const previous = await collectDeadlines(now, { fetch: fixtureFetch() });
-      expect(previous.ok).toBe(true);
-      const cache = applyOutcome(EMPTY_CACHE, previous, now);
+      if (!previous.ok) throw new Error('expected previous snapshot');
 
       const outcome = await collectDeadlines(now, { fetch });
       expect(outcome).toMatchObject({
@@ -115,7 +107,16 @@ describe('collectDeadlines', () => {
         error: { kind: 'schema', path: KLAS_PATHS.semesters },
       });
       expect(fetch).toHaveBeenCalledTimes(1);
-      expect(applyOutcome(cache, outcome, now + 1).snapshot).toBe(cache.snapshot);
+      const result = await refreshDeadlines(
+        {
+          collect: () => Promise.resolve(outcome),
+          now: () => now + 1,
+          readAccountHash: () => Promise.resolve('account-a'),
+        },
+        'account-a',
+        { snapshot: previous.snapshot, lastError: null },
+      );
+      expect(result.snapshot).toBe(previous.snapshot);
     },
   );
 

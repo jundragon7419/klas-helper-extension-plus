@@ -22,10 +22,6 @@ export interface SessionKeeperDeps {
   alarmExists: () => Promise<boolean>;
   createAlarm: () => Promise<void>;
   clearAlarm: () => Promise<void>;
-  /** 연장 요청을 보내기 전 마감 캐시의 계정 범위를 읽는다. */
-  readFetchScope: () => Promise<string | undefined>;
-  /** 연장 응답이 세션 만료일 때 요청을 시작한 범위를 함께 넘긴다. */
-  onSessionLost: (error: KlasError, fetchScope: string | undefined, tabId: number) => Promise<void>;
 }
 
 export type KeepAliveResult =
@@ -75,7 +71,6 @@ export function createSessionKeeper(deps: SessionKeeperDeps) {
         const gone: number[] = [];
         try {
           for (const tabId of tabs) {
-            const fetchScope = await deps.readFetchScope();
             if (!(await sessionKeepAlive.getValue())) return { status: 'disabled' };
             let result: KlasResult<SessionStatus>;
             try {
@@ -85,9 +80,6 @@ export function createSessionKeeper(deps: SessionKeeperDeps) {
               continue;
             }
             if (result.ok) return { status: 'extended', tabId };
-            if (result.error.kind === 'session') {
-              await deps.onSessionLost(result.error, fetchScope, tabId);
-            }
             return { status: 'failed', tabId, error: result.error };
           }
           return { status: 'no-tab' };

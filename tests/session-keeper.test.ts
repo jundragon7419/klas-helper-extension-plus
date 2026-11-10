@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { deadlineCache } from '@/utils/deadline-cache';
-import { createFetchCoordinator } from '@/utils/fetch-coordinator';
 import {
   extendSession,
   KLAS_PATHS,
@@ -35,8 +33,6 @@ function setup(answers: Record<number, KlasResult<SessionStatus> | 'gone'> = {})
       alarm = false;
       return Promise.resolve();
     }),
-    readFetchScope: vi.fn(() => Promise.resolve('scope-a')),
-    onSessionLost: vi.fn(() => Promise.resolve()),
   };
   return { deps, keeper: createSessionKeeper(deps), hasAlarm: () => alarm };
 }
@@ -126,132 +122,12 @@ describe('createSessionKeeper', () => {
     expect(hasAlarm()).toBe(false);
   });
 
-  it('연장 응답이 세션 만료면 알리고, 다른 탭으로 다시 시도하지 않는다', async () => {
+  it('연장 응답이 세션 만료면 실패를 반환하고, 다른 탭으로 다시 시도하지 않는다', async () => {
     const { deps, keeper } = setup({ 1: { ok: false, error: lost } });
     await keeper.registerTab(1);
     await keeper.registerTab(2);
     expect(await keeper.onAlarm()).toEqual({ status: 'failed', tabId: 1, error: lost });
-    expect(deps.onSessionLost).toHaveBeenCalledWith(lost, 'scope-a', 1);
     expect(deps.extendInTab).toHaveBeenCalledTimes(1);
-  });
-
-  it('세션 만료가 아닌 실패는 알리지 않는다', async () => {
-    const network: KlasError = { kind: 'network', path: '/x', message: 'm' };
-    const { deps, keeper } = setup({ 1: { ok: false, error: network } });
-    await keeper.registerTab(1);
-    expect((await keeper.onAlarm()).status).toBe('failed');
-    expect(deps.onSessionLost).not.toHaveBeenCalled();
-  });
-});
-
-describe('세션 만료를 캐시에 기록', () => {
-  beforeEach(() => {
-    fakeBrowser.reset();
-  });
-
-  it.each([
-    { finalAccount: 'account-b', switched: true },
-    { finalAccount: 'account-a', switched: true },
-    { finalAccount: 'account-a', switched: false },
-  ])(
-    '이전 연장의 늦은 만료가 $finalAccount 캐시를 바꾸지 않는다 (계정 전환 감지: $switched)',
-    async ({ finalAccount, switched }) => {
-      const coordinator = createFetchCoordinator({ now: () => 5 });
-      const started = Promise.withResolvers<void>();
-      const renewal = Promise.withResolvers<KlasResult<SessionStatus>>();
-      const { deps } = setup();
-      const confirm = vi.fn(() => Promise.resolve(false));
-      const keeper = createSessionKeeper({
-        ...deps,
-        readFetchScope: async () => (await deadlineCache.getValue()).fetchScope,
-        extendInTab: () => {
-          started.resolve();
-          return renewal.promise;
-        },
-        onSessionLost: (error, fetchScope) => coordinator.recordFailure(error, fetchScope, confirm),
-      });
-      await coordinator.request(1, 'account-a');
-      await keeper.registerTab(1);
-
-      const alarm = keeper.onAlarm();
-      await started.promise;
-      if (switched && finalAccount === 'account-a') await coordinator.request(2, 'account-b');
-      await coordinator.releaseTab(1);
-      const decision = await coordinator.request(2, finalAccount, true);
-      if (decision.action !== 'fetch') throw new Error('expected fetch');
-      const snapshot = {
-        semester: '2026,2',
-        checkedAt: 5,
-        deadlines: [],
-        skipped: [],
-        failures: [],
-      };
-      await coordinator.report(2, decision.leaseId, finalAccount, finalAccount, {
-        ok: true,
-        snapshot,
-      });
-
-      renewal.resolve({ ok: false, error: lost });
-      await alarm;
-
-      expect(confirm).toHaveBeenCalledTimes(switched ? 0 : 1);
-      expect(await deadlineCache.getValue()).toMatchObject({
-        accountHash: finalAccount,
-        snapshot,
-        lastError: null,
-      });
-    },
-  );
-
-  it.each([undefined, 'scope-a'])(
-    '같은 범위 %s의 만료는 이전 결과를 두고 기록한다',
-    async (fetchScope) => {
-      const snapshot = {
-        semester: '2026,2',
-        checkedAt: 1,
-        deadlines: [],
-        skipped: [],
-        failures: [],
-      };
-      const cache = { snapshot, lastError: null, ...(fetchScope && { fetchScope }) };
-      await deadlineCache.setValue(cache);
-      await createFetchCoordinator({ now: () => 5 }).recordFailure(lost, fetchScope, () =>
-        Promise.resolve(true),
-      );
-      expect(await deadlineCache.getValue()).toEqual({ ...cache, lastError: { ...lost, at: 5 } });
-    },
-  );
-
-  it('만료 재확인 뒤 시작한 조회가 먼저 성공하면 새 캐시를 숨기지 않는다', async () => {
-    let now = 5;
-    const coordinator = createFetchCoordinator({ now: () => now });
-    await coordinator.request(1, 'account-a');
-    const { fetchScope } = await deadlineCache.getValue();
-    const started = Promise.withResolvers<void>();
-    const confirmation = Promise.withResolvers<boolean>();
-    const confirm = vi.fn(() => {
-      started.resolve();
-      return confirmation.promise;
-    });
-    const loss = coordinator.recordFailure(lost, fetchScope, confirm);
-    await Promise.race([started.promise, loss]);
-    expect(confirm).toHaveBeenCalledOnce();
-
-    now = 6;
-    const decision = await coordinator.request(1, 'account-a', true);
-    if (decision.action !== 'fetch') throw new Error('expected fetch');
-    const snapshot = {
-      semester: '2026,2',
-      checkedAt: now,
-      deadlines: [],
-      skipped: [],
-      failures: [],
-    };
-    await coordinator.report(1, decision.leaseId, 'account-a', 'account-a', { ok: true, snapshot });
-    confirmation.resolve(true);
-    await loss;
-
-    expect(await deadlineCache.getValue()).toMatchObject({ snapshot, lastError: null });
   });
 });
 

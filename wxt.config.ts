@@ -10,7 +10,7 @@ export default defineConfig({
   // Firefox도 Chrome과 같은 Manifest V3로 빌드한다. (WXT 기본값은 Firefox만 MV2)
   manifestVersion: 3,
   manifest: ({ browser }) => ({
-    // storage: 마감 조회 결과의 캐시, 탭 사이 조회권, 설정을 저장한다.
+    // storage: 설정과 세션 연장 대상 탭을 저장한다.
     // alarms: KLAS 탭이 열려 있는 동안 10분마다 세션을 연장한다.
     permissions: ['storage', 'alarms'],
     name: 'KLAS Helper Extension Plus',

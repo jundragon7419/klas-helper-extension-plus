@@ -2,7 +2,6 @@ import { render } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
-import type { RefreshDeps } from '../refresh-deadlines';
 import drawerCss from './deadline-drawer.css?inline';
 import { DeadlinePanel } from './deadline-panel';
 import { SessionSettings } from './session-settings';
@@ -11,8 +10,8 @@ import { tokens, tokensToCss } from './tokens';
 
 const NARROW_DRAWER_QUERY = `(width < ${tokens.size['narrow-breakpoint']}px)`;
 
-function DeadlineDrawer({ ctx, send }: { ctx: ContentScriptContext; send: RefreshDeps['send'] }) {
-  const { cache, checking, check } = useDeadlineList(ctx, send);
+function DeadlineDrawer({ ctx }: { ctx: ContentScriptContext }) {
+  const { cache, checking, check } = useDeadlineList(ctx);
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const handle = useRef<HTMLButtonElement>(null);
@@ -167,10 +166,7 @@ function DeadlineDrawer({ ctx, send }: { ctx: ContentScriptContext; send: Refres
   );
 }
 
-export async function mountDeadlineDrawer(
-  ctx: ContentScriptContext,
-  send: RefreshDeps['send'],
-): Promise<void> {
+export async function mountDeadlineDrawer(ctx: ContentScriptContext): Promise<void> {
   const ui = await createShadowRootUi(ctx, {
     name: 'klas-helper-plus-drawer',
     position: 'inline',
@@ -186,7 +182,7 @@ ${drawerCss}
   }
 }`,
     onMount(container) {
-      render(<DeadlineDrawer ctx={ctx} send={send} />, container);
+      render(<DeadlineDrawer ctx={ctx} />, container);
       return container;
     },
     onRemove(container) {
