@@ -111,9 +111,9 @@ describe('collectDeadlines', () => {
         {
           collect: () => Promise.resolve(outcome),
           now: () => now + 1,
-          readAccountHash: () => Promise.resolve('account-a'),
+          checkAccount: () => Promise.resolve({ hash: 'account-a' }),
         },
-        'account-a',
+        { hash: 'account-a' },
         { snapshot: previous.snapshot, lastError: null },
       );
       expect(result.snapshot).toBe(previous.snapshot);

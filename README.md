@@ -4,19 +4,15 @@
 
 > 이 프로젝트는 광운대학교의 공식 프로그램이 아닙니다. KLAS 화면이나 내부 API가 바뀌면 일부 기능이 동작하지 않을 수 있습니다.
 
-## 상태
-
-개발 시작 단계입니다. 구조와 결정 사항은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 있습니다.
-
-## 계획한 기능
+## 기능
 
 KLAS를 보고 있을 때 돕는 확장입니다. KLAS가 열려 있지 않을 때는 KLAS에 요청하지 않습니다.
 
 - KLAS 화면 오른쪽의 `<` 버튼으로 여닫는 탭에서 과제, 온라인 강의, 팀 프로젝트, 퀴즈의 남은 마감을 마감 순으로 보기
-- KLAS를 열어 둔 동안 로그인이 끊기지 않도록 세션 연장 (끄는 설정 화면은 추가 예정)
+- KLAS를 열어 둔 동안 세션 자동 연장. 마감 패널의 설정에서 끌 수 있음
 - 기존 KLAS 화면에 더한 기능에는 확장 기능이라는 표시
 
-자세한 계획은 [docs/ROADMAP.md](docs/ROADMAP.md)에 있습니다.
+직접 빌드하고 설치하는 방법은 [CONTRIBUTING.md](CONTRIBUTING.md)에 있습니다. 구조와 이후 계획은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)와 [docs/ROADMAP.md](docs/ROADMAP.md)를 참고하세요.
 
 ## 개인정보
 
