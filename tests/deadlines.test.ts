@@ -175,7 +175,7 @@ describe('normalizeSubject: 읽을 수 없는 마감', () => {
     });
     expect(deadlines).toEqual([]);
     expect(skipped).toEqual([
-      { kind: 'task', subjectCode: 'S1', reason: '마감 날짜를 읽을 수 없음: 2026/11/10' },
+      { kind: 'task', subjectCode: 'S1', reason: '마감 날짜를 읽을 수 없음' },
     ]);
   });
 

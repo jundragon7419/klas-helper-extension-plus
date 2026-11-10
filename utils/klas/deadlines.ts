@@ -89,13 +89,12 @@ export function normalizeSubject({
     fields: Pick<Deadline, 'title' | 'startsAt' | 'done' | 'extended' | 'submissionWindow'> & {
       dueAt: number | null;
     },
-    rawDue: string,
   ) => {
     if (fields.dueAt === null) {
       skipped.push({
         kind,
         subjectCode: subject.value,
-        reason: `마감 날짜를 읽을 수 없음: ${rawDue}`,
+        reason: '마감 날짜를 읽을 수 없음',
       });
       return;
     }
@@ -114,18 +113,13 @@ export function normalizeSubject({
   for (const [index, row] of (lists.online ?? []).entries()) {
     if (row.evltnSe !== 'lesson' || row.isonoff === 'OFF') continue;
     const due = parseKlasDate(row.endDate);
-    add(
-      'online',
-      rowKey(row.oid, index),
-      {
-        title: row.sbjt,
-        startsAt: parseKlasDate(row.startDate),
-        dueAt: due === null ? null : due + END_OF_MINUTE_MS,
-        done: row.prog === 100,
-        extended: false,
-      },
-      row.endDate,
-    );
+    add('online', rowKey(row.oid, index), {
+      title: row.sbjt,
+      startsAt: parseKlasDate(row.startDate),
+      dueAt: due === null ? null : due + END_OF_MINUTE_MS,
+      done: row.prog === 100,
+      extended: false,
+    });
   }
 
   // 과제와 팀 프로젝트: 원래 기한이 지났고 추가 제출 기한이 있으면 그것을 마감으로 쓴다.
@@ -134,39 +128,29 @@ export function normalizeSubject({
       const original = parseKlasDate(row.expiredate);
       const extra = parseKlasDate(row.reexpiredate);
       const extended = original !== null && extra !== null && now > original;
-      add(
-        kind,
-        rowKey(kind === 'task' ? row.taskNo : row.ordseq, index),
-        {
-          title: row.title,
-          startsAt: parseKlasDate(row.startdate),
-          dueAt: extended ? extra : original,
-          done: row.submityn === 'Y',
-          extended,
-          submissionWindow:
-            original !== null && extra !== null
-              ? { originalDueAt: original, extraDueAt: extra }
-              : null,
-        },
-        row.expiredate,
-      );
+      add(kind, rowKey(kind === 'task' ? row.taskNo : row.ordseq, index), {
+        title: row.title,
+        startsAt: parseKlasDate(row.startdate),
+        dueAt: extended ? extra : original,
+        done: row.submityn === 'Y',
+        extended,
+        submissionWindow:
+          original !== null && extra !== null
+            ? { originalDueAt: original, extraDueAt: extra }
+            : null,
+      });
     }
   }
 
   // 퀴즈
   for (const [index, row] of (lists.quiz ?? []).entries()) {
-    add(
-      'quiz',
-      rowKey(row.papernum, index),
-      {
-        title: row.papernm,
-        startsAt: parseKlasDate(row.sdt),
-        dueAt: parseKlasDate(row.edt),
-        done: row.issubmit === 'Y',
-        extended: false,
-      },
-      row.edt,
-    );
+    add('quiz', rowKey(row.papernum, index), {
+      title: row.papernm,
+      startsAt: parseKlasDate(row.sdt),
+      dueAt: parseKlasDate(row.edt),
+      done: row.issubmit === 'Y',
+      extended: false,
+    });
   }
 
   return { deadlines, skipped };

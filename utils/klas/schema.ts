@@ -60,11 +60,23 @@ export interface KlasQuizRow {
   papernum?: unknown;
 }
 
-type Check = (value: unknown) => boolean;
+interface Check {
+  accepts: (value: unknown) => boolean;
+  expected: string;
+}
 
-const isString: Check = (value) => typeof value === 'string';
-const isNumber: Check = (value) => typeof value === 'number' && Number.isFinite(value);
-const isStringOrNull: Check = (value) => value === null || typeof value === 'string';
+const stringField: Check = {
+  accepts: (value) => typeof value === 'string',
+  expected: '문자열',
+};
+const numberField: Check = {
+  accepts: (value) => typeof value === 'number' && Number.isFinite(value),
+  expected: '유한한 숫자',
+};
+const nullableStringField: Check = {
+  accepts: (value) => value === null || stringField.accepts(value),
+  expected: '문자열 또는 null',
+};
 
 type Shape = Record<string, Check>;
 
@@ -76,8 +88,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function describeMismatch(value: unknown, shape: Shape, where: string): string | null {
   if (!isRecord(value)) return `${where}: 객체가 아님`;
   for (const [field, check] of Object.entries(shape)) {
-    if (!check(value[field])) {
-      return `${where}.${field}: 형식이 다름 (${JSON.stringify(value[field]) ?? 'undefined'})`;
+    if (!check.accepts(value[field])) {
+      return `${where}.${field}: ${check.expected} 필요`;
     }
   }
   return null;
@@ -98,24 +110,29 @@ function describeRowsMismatch(
   return null;
 }
 
-const SUBJECT_SHAPE: Shape = { value: isString, label: isString, name: isString };
-const SEMESTER_SHAPE: Shape = { value: isString, label: isString };
+const SUBJECT_SHAPE: Shape = { value: stringField, label: stringField, name: stringField };
+const SEMESTER_SHAPE: Shape = { value: stringField, label: stringField };
 const ONLINE_SHAPE: Shape = {
-  evltnSe: isString,
-  sbjt: isString,
-  moduletitle: isString,
-  startDate: isString,
-  endDate: isString,
+  evltnSe: stringField,
+  sbjt: stringField,
+  moduletitle: stringField,
+  startDate: stringField,
+  endDate: stringField,
 };
-const LESSON_SHAPE: Shape = { ...ONLINE_SHAPE, isonoff: isString, prog: isNumber };
+const LESSON_SHAPE: Shape = { ...ONLINE_SHAPE, isonoff: stringField, prog: numberField };
 const TASK_SHAPE: Shape = {
-  title: isString,
-  startdate: isString,
-  expiredate: isString,
-  reexpiredate: isStringOrNull,
-  submityn: isString,
+  title: stringField,
+  startdate: stringField,
+  expiredate: stringField,
+  reexpiredate: nullableStringField,
+  submityn: stringField,
 };
-const QUIZ_SHAPE: Shape = { papernm: isString, sdt: isString, edt: isString, issubmit: isString };
+const QUIZ_SHAPE: Shape = {
+  papernm: stringField,
+  sdt: stringField,
+  edt: stringField,
+  issubmit: stringField,
+};
 
 /** 검사 결과. 실패하면 무엇이 틀렸는지 담는다. */
 export type SchemaResult<T> = { ok: true; data: T } | { ok: false; reason: string };

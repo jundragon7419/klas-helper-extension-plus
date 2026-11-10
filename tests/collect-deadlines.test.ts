@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyOutcome, EMPTY_CACHE } from '@/utils/deadline-cache';
+import { applyOutcome, deadlineCache, EMPTY_CACHE } from '@/utils/deadline-cache';
 import { parseKlasDate } from '@/utils/date';
 import { KLAS_PATHS } from '@/utils/klas/api';
 import { collectDeadlines } from '@/utils/klas/collect-deadlines';
@@ -48,6 +48,29 @@ describe('collectDeadlines', () => {
     expect(outcome.snapshot.failures.every((f) => f.kind === 'schema')).toBe(true);
     expect(outcome.snapshot.deadlines.filter((d) => d.kind === 'project')).toEqual([]);
     expect(outcome.snapshot.deadlines).toHaveLength(19 + 14 + 2);
+  });
+
+  it('형식 오류는 원본 응답 값 없이 로컬 캐시에 저장한다', async () => {
+    const marker = 'synthetic-private-field';
+    const fetch = fixtureFetch((path) =>
+      path === KLAS_PATHS.task ? json([{ title: { marker } }]) : undefined,
+    );
+    const outcome = await collectDeadlines(now, { fetch });
+    if (!outcome.ok) throw new Error('expected partial success');
+    expect(outcome.snapshot.failures[0]).toEqual({
+      kind: 'schema',
+      path: KLAS_PATHS.task,
+      message: 'task[0].title: 문자열 필요',
+    });
+
+    await deadlineCache.setValue(applyOutcome(EMPTY_CACHE, outcome, now));
+    try {
+      const saved = await deadlineCache.getValue();
+      expect(saved.snapshot?.failures[0]?.message).toBe('task[0].title: 문자열 필요');
+      expect(JSON.stringify(saved)).not.toContain(marker);
+    } finally {
+      await deadlineCache.removeValue();
+    }
   });
 
   it('모든 마감 목록의 조회가 실패하면 전체 실패다', async () => {
