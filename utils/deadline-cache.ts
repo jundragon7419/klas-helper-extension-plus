@@ -40,6 +40,34 @@ export const deadlineCache = storage.defineItem<DeadlineCache>('local:deadlineCa
   version: 1,
 });
 
+/** 이전 확장이 진단에 덧붙인 응답 원문만 제거한다. */
+function redactLegacyError<T extends KlasError>(error: T): T {
+  if (error.kind === 'schema') {
+    const suffix = ': 형식이 다름';
+    const start = error.message.indexOf(suffix + ' (');
+    if (start !== -1) return { ...error, message: error.message.slice(0, start + suffix.length) };
+  }
+  if (error.kind === 'not-json' && error.message.startsWith('JSON이 아닌 응답 (')) {
+    return { ...error, message: 'JSON이 아닌 응답' };
+  }
+  return error;
+}
+
+function redactLegacySnapshot(snapshot: DeadlineSnapshot | null): DeadlineSnapshot | null {
+  if (!snapshot || (snapshot.failures.length === 0 && snapshot.skipped.length === 0)) {
+    return snapshot;
+  }
+  return {
+    ...snapshot,
+    failures: snapshot.failures.map(redactLegacyError),
+    skipped: snapshot.skipped.map((row) =>
+      row.reason.startsWith('마감 날짜를 읽을 수 없음:')
+        ? { ...row, reason: '마감 날짜를 읽을 수 없음' }
+        : row,
+    ),
+  };
+}
+
 /** 조회 결과를 캐시에 반영한다. 실패하면 이전 결과를 그대로 두고 실패만 기록한다. */
 export function applyOutcome(
   cache: DeadlineCache,
@@ -50,9 +78,17 @@ export function applyOutcome(
     const { lastError } = cache;
     const { snapshot } = outcome;
     const keepError = lastError !== null && snapshot.checkedAt <= lastError.at;
-    return { ...cache, snapshot, lastError: keepError ? lastError : null };
+    return {
+      ...cache,
+      snapshot: redactLegacySnapshot(snapshot),
+      lastError: keepError ? redactLegacyError(lastError) : null,
+    };
   }
-  return { ...cache, lastError: { ...outcome.error, at: now } };
+  return {
+    ...cache,
+    snapshot: redactLegacySnapshot(cache.snapshot),
+    lastError: { ...redactLegacyError(outcome.error), at: now },
+  };
 }
 
 /**

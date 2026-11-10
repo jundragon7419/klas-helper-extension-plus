@@ -121,6 +121,15 @@ describe('KLAS API: 실패 종류', () => {
     expectError(await run(respond('ok')), 'not-json');
   });
 
+  it('not-json: 응답 헤더의 원본 값은 진단에 포함하지 않는다', async () => {
+    const result = await run(respond('ok', { contentType: 'text/plain; note=synthetic-private' }));
+    expect(result).toMatchObject({
+      ok: false,
+      error: { kind: 'not-json', message: 'JSON이 아닌 응답' },
+    });
+    expect(JSON.stringify(result)).not.toContain('synthetic-private');
+  });
+
   it('not-json: JSON이라면서 읽을 수 없음', async () => {
     expectError(await run(respond('{broken', { contentType: 'application/json' })), 'not-json');
   });
