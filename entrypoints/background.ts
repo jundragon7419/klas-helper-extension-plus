@@ -35,7 +35,16 @@ export default defineBackground(() => {
       await browser.alarms.clear(KEEPALIVE_ALARM);
     },
     readFetchScope: async () => (await deadlineCache.getValue()).fetchScope,
-    onSessionLost: (error, fetchScope) => coordinator.recordFailure(error, fetchScope),
+    onSessionLost: (error, fetchScope, tabId) =>
+      coordinator.recordFailure(error, fetchScope, async () => {
+        const message: TabMessage = { type: 'session/confirm-expiry' };
+        try {
+          return (await browser.tabs.sendMessage<TabMessage, boolean>(tabId, message)) === true;
+        } catch {
+          // 탭이 닫히거나 이동했다면 현재 세션의 만료 여부를 확인할 수 없다.
+          return false;
+        }
+      }),
   });
 
   const handle = (message: ExtensionMessage, tabId: number): Promise<unknown> => {

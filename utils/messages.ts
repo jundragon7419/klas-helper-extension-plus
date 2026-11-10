@@ -20,7 +20,9 @@ export type ExtensionMessage =
 /** background → content script */
 export type TabMessage =
   /** 세션을 연장하라. 답은 KlasResult<SessionStatus> */
-  { type: 'session/extend' };
+  | { type: 'session/extend' }
+  /** 현재 세션이 만료됐는지 확인한다. 로그인 페이지로 이동하면 true. */
+  | { type: 'session/confirm-expiry' };
 
 const EXTENSION_TYPES = new Set(['klas/opened', 'deadlines/request', 'deadlines/report']);
 
@@ -31,9 +33,7 @@ export function isExtensionMessage(value: unknown): value is ExtensionMessage {
 }
 
 export function isTabMessage(value: unknown): value is TabMessage {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    (value as { type?: unknown }).type === 'session/extend'
-  );
+  if (value === null || typeof value !== 'object') return false;
+  const { type } = value as { type?: unknown };
+  return type === 'session/extend' || type === 'session/confirm-expiry';
 }
