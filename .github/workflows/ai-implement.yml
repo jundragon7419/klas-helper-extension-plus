@@ -79,6 +79,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # 커밋과 PR에 Claude Code 작성 표시를 붙이지 않는다 (AGENTS.md "작성 표시").
+          settings: '{"includeCoAuthoredBy": false, "attribution": {"commit": "", "pr": ""}}'
           prompt: |
             저장소 ${{ github.repository }}의 이슈 #${{ github.event.issue.number }}를 구현한다.
             메인테이너의 실행 댓글: ${{ github.event.comment.html_url }}
