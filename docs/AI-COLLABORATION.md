@@ -23,7 +23,7 @@
 - 수정 3회 뒤에도 지적이 남음
 - Claude가 지적에 동의하지 않아 코드를 바꾸지 않음
 - 마지막 커밋 뒤 3시간 동안 Codex 리뷰가 없음
-- 구현 중 권한 추가, 공통 모듈 재작성, 실제 데이터가 필요하다고 판단함 (이 경우 PR 대신 이슈 댓글로 멈춘다)
+- 구현 중 권한 추가, 공통 모듈 재작성, 실제 데이터, `.github/workflows/` 수정이 필요하다고 판단함 (이 경우 PR 대신 이슈 댓글로 멈춘다)
 
 | 라벨 | 뜻 |
 |---|---|
@@ -39,6 +39,7 @@
 - 지적 처리 표시(`ai-handled`)는 `claude[bot]`이 남긴 댓글만 인정한다.
 - 같은 이슈에 열린 PR이 있으면 새 구현을 시작하지 않는다.
 - 머지는 사용자만 한다.
+- 자동 흐름의 Claude는 `.github/workflows/` 파일을 push할 수 없다(GitHub App에 workflows 권한을 주지 않는다). 워크플로 변경은 수동 방식으로 한다.
 - `MAINTAINER_PR_TOKEN`은 이 저장소만 대상으로 한 fine-grained token이다. 권한은 Pull requests, Issues 읽기/쓰기와 Contents 읽기뿐이라 push와 머지는 할 수 없다. 이 토큰은 PR을 여는 단계에서만 쓰고 Claude 단계에는 넘기지 않는다.
 
 ## 작업 시작
