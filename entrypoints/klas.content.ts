@@ -5,7 +5,9 @@ import { extendSession } from '@/utils/klas/api';
 import { isTabMessage, type ExtensionMessage } from '@/utils/messages';
 import { readBackgroundReply, withReceiverRetry } from '@/utils/send-message';
 import { mountDeadlineDrawer } from '@/utils/ui/deadline-drawer';
+import { watchLessonTimes } from '@/utils/ui/lesson-time';
 import { mountSessionIndicator } from '@/utils/ui/session-indicator';
+import '@/utils/ui/lesson-time.css';
 import '@/utils/ui/session-indicator.css';
 
 const send = async (message: ExtensionMessage) =>
@@ -25,6 +27,12 @@ export default defineContentScript({
     void mountDeadlineDrawer(ctx).catch((error: unknown) => {
       console.warn('[KLAS Helper Plus] 마감 일정 패널을 열지 못했습니다.', error);
     });
+
+    try {
+      ctx.onInvalidated(watchLessonTimes(document.body));
+    } catch (error) {
+      console.warn('[KLAS Helper Plus] 수업 시간을 표시하지 못했습니다.', error);
+    }
 
     // background가 10분마다 맡기는 세션 연장. KLAS와 같은 출처로 보내야 로그인 쿠키가 실린다.
     const onMessage = (message: unknown, _sender: unknown, sendResponse: (r: unknown) => void) => {
