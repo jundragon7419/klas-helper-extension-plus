@@ -8,6 +8,11 @@ const ATTRIBUTE = 'data-khp-lesson-time';
  * 여러 번 실행해도 항목마다 하나만 남고, 해석할 수 없는 항목에는 붙이지 않는다.
  */
 export function showLessonTimes(root: ParentNode): void {
+  // lessontimeN class가 사라진 항목은 아래 선택자에 걸리지 않으므로 이전 표시를 먼저 정리한다.
+  for (const label of root.querySelectorAll<HTMLElement>(`table.scheduletb [${ATTRIBUTE}]`)) {
+    const owner = label.parentElement;
+    if (!owner || !/(?:^|\s)lessontime\d+(?:\s|$)/.test(owner.className)) label.remove();
+  }
   for (const lesson of root.querySelectorAll<HTMLElement>(
     'table.scheduletb div[class*="lessontime"]',
   )) {
@@ -59,6 +64,14 @@ export function watchLessonTimes(root: HTMLElement): () => void {
     setTimeout(run, 0);
   });
   run();
-  observer.observe(root, { childList: true, subtree: true });
+  // 시간 계산에 쓰는 class와 교시 텍스트 변경도 감지한다.
+  // 확장 표시는 같은 결과면 다시 붙이지 않으므로 갱신이 반복되지 않는다.
+  observer.observe(root, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['class'],
+  });
   return () => observer.disconnect();
 }
