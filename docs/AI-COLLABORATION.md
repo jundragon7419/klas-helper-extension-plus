@@ -12,7 +12,7 @@
 4. Codex 자동 리뷰가 PR의 현재 커밋을 검토한다. 검토 기준은 루트 `AGENTS.md`의 "Review guidelines"다.
 5. `AI review loop` 워크플로가 결과를 판단한다.
    - 현재 커밋에 Codex 지적이 있거나 CI가 실패하면 Claude가 고치고 같은 브랜치에 push한다. push하면 Codex가 다시 검토한다. 회차마다 `ai:round-N` 라벨이 붙는다.
-   - 현재 커밋에 Codex가 "주요 지적 없음"을 남기고 CI `check`가 성공하면 `ai:ready`로 바꾸고 사용자를 호출한다.
+   - Codex 요약 댓글의 상태 표시(`codex-review-state`)가 현재 커밋의 검토 완료를 가리키고, 그 커밋에 Codex 지적이 없고, CI `check`가 성공하면 `ai:ready`로 바꾸고 사용자를 호출한다. 그 뒤에 지적이 도착하면 `ai:in-progress`로 되돌리고 고친다.
 6. 사용자가 PR과 "KLAS에서 직접 확인할 항목"을 확인하고 PR 본문의 Squash 커밋 메시지로 머지한다.
 
 다음 경우에는 `ai:needs-human` 라벨을 붙이고 멈춘다. 사용자가 판단한 뒤 라벨을 지우면 다음 Codex 리뷰나 CI 결과부터 다시 판단한다.
@@ -32,7 +32,8 @@
 안전 장치:
 
 - 구현은 `jundragon7419`의 `@claude` 댓글로만 시작한다. 검토 반영은 같은 저장소 브랜치의 `ai:in-progress` PR에서만 한다.
-- 통과 판정은 현재 head 커밋에 대한 Codex 결과와 CI 결과만 쓴다. 새 커밋이 올라오면 `ai:ready`는 지워진다.
+- 통과 판정은 현재 head 커밋 SHA에 묶인 Codex 결과와 CI 결과만 쓴다. 새 커밋이 올라오면 `ai:ready`는 지워진다.
+- 지적 처리 표시(`ai-handled`)는 `claude[bot]`이 남긴 댓글만 인정한다.
 - 같은 이슈에 열린 PR이 있으면 새 구현을 시작하지 않는다.
 - 머지는 사용자만 한다.
 
