@@ -119,12 +119,6 @@ button svg {
   outline-color: currentColor;
 }
 
-.drawer-settings-button:hover,
-.drawer-close:hover {
-  background: radial-gradient(circle closest-side, var(--khp-color-accent-hover) 97%, transparent)
-    center / 32px 32px no-repeat;
-}
-
 .drawer-session-settings {
   padding: var(--khp-space-2) var(--khp-space-5);
   border-bottom: 1px solid var(--khp-color-tab-border);
