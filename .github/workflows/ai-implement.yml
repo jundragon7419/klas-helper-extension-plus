@@ -72,7 +72,9 @@ jobs:
 
       - name: 의존성 설치
         if: steps.guard.outputs.skip == 'false'
-        run: npm ci
+        run: |
+          npm ci
+          echo ".ai-pr/" >> .git/info/exclude
 
       - name: Claude 구현
         if: steps.guard.outputs.skip == 'false'
@@ -99,14 +101,42 @@ jobs:
             6. 검사를 모두 실행해 통과시킨다:
                npm run lint, npm run format:check, npm run typecheck, npm test, npm run build, npm run build:firefox
             7. `git commit -m "<영어 명령형 제목 한 줄>"`로 커밋하고 push한다. 커밋 본문과 덧붙이는 줄(Co-Authored-By 등)은 쓰지 않는다.
-            8. `gh pr create --base develop`로 PR을 연다.
-               - 제목: 커밋 제목과 같은 영어 문장
-               - 본문: .github/PULL_REQUEST_TEMPLATE.md 칸을 그대로 채운다(한국어). "관련 이슈"에 `Closes #${{ github.event.issue.number }}`.
+            8. PR은 직접 열지 않는다. 다음 단계가 메인테이너 계정으로 연다. 대신 두 파일을 만든다(`.ai-pr/`는 커밋하지 않는다).
+               - `.ai-pr/title.txt`: 커밋 제목과 같은 영어 문장 한 줄
+               - `.ai-pr/body.md`: .github/PULL_REQUEST_TEMPLATE.md 칸을 그대로 채운다(한국어). "관련 이슈"에 `Closes #${{ github.event.issue.number }}`.
                  직접 확인하지 않은 확인 항목은 체크하지 않는다. KLAS에서 직접 확인할 항목은 따로 적는다.
-                 맨 아래에 "## Squash 커밋 메시지" 절을 두고 제목(끝에 PR 번호 자리 `(#번호)`)과 `- ` 목록 본문, 마지막 줄 `Closes #${{ github.event.issue.number }}`를 적는다.
-               - 라벨: `ai:in-progress`와 이슈의 라벨, 마일스톤: 이슈와 같게, 담당자: jundragon7419
-               PR을 만든 뒤 `gh pr edit <번호> --body-file <파일>`로 Squash 제목의 `(#번호)`를 실제 PR 번호로 채운다.
-            9. 이슈에 PR 주소를 댓글로 남긴다.
+                 맨 아래에 "## Squash 커밋 메시지" 절을 두고 제목(끝에 `(#PR)`을 그대로 적는다. 다음 단계가 실제 번호로 바꾼다)과 `- ` 목록 본문, 마지막 줄 `Closes #${{ github.event.issue.number }}`를 적는다.
+               라벨, 마일스톤, 담당자는 다음 단계가 이슈를 보고 붙인다.
           claude_args: |
             --max-turns 80
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git switch:*),Bash(git checkout:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(npm run:*),Bash(npm test:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh label list:*)"
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git switch:*),Bash(git checkout:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(npm run:*),Bash(npm test:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh label list:*)"
+
+      # PR을 메인테이너 계정으로 열어야 Codex 자동 리뷰가 붙고, Squash 커밋 작성자도 메인테이너가 된다.
+      - name: 메인테이너 계정으로 PR 열기
+        if: steps.guard.outputs.skip == 'false' && hashFiles('.ai-pr/title.txt') != ''
+        env:
+          GH_TOKEN: ${{ secrets.MAINTAINER_PR_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          ACTIONS_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "::error::MAINTAINER_PR_TOKEN secret이 없습니다."; exit 1; fi
+          branch=$(git rev-parse --abbrev-ref HEAD)
+          if ! [[ "$branch" =~ ^(feat|fix|refactor|docs|chore)/${ISSUE}- ]]; then
+            echo "::error::브랜치 이름이 규칙과 다릅니다: $branch"; exit 1
+          fi
+          if [ "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" != "$(git rev-parse HEAD)" ]; then
+            echo "::error::$branch 의 현재 커밋이 원격에 없습니다."; exit 1
+          fi
+          title=$(head -n 1 .ai-pr/title.txt)
+          args=(--base develop --head "$branch" --title "$title" --body-file .ai-pr/body.md --assignee jundragon7419 --label ai:in-progress)
+          while IFS= read -r label; do [ -n "$label" ] && args+=(--label "$label"); done \
+            < <(gh issue view "$ISSUE" --json labels --jq '.labels[].name')
+          milestone=$(gh issue view "$ISSUE" --json milestone --jq '.milestone.title // empty')
+          [ -n "$milestone" ] && args+=(--milestone "$milestone")
+          url=$(gh pr create "${args[@]}")
+          number=${url##*/}
+          sed -i "s/(#PR)/(#$number)/" .ai-pr/body.md
+          gh pr edit "$number" --body-file .ai-pr/body.md
+          GH_TOKEN=$ACTIONS_TOKEN gh issue comment "$ISSUE" --body "PR을 열었습니다: $url"
+          echo "PR: $url" >> "$GITHUB_STEP_SUMMARY"

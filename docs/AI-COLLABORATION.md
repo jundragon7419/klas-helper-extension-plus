@@ -11,7 +11,7 @@
    - 사용자가 이슈에 `@claude`로 시작하는 댓글을 직접 단다.
    - 사용자가 Codex 대화에서 이슈 번호를 들어 진행을 승인하면, Codex가 사용자 계정으로 그 이슈에 `@claude` 댓글을 단다.
    이 댓글이 구현 시작 신호다. 댓글에 덧붙인 내용은 구현 지시로 쓴다.
-3. `AI implement` 워크플로에서 Claude가 브랜치를 만들어 구현하고, 검사를 통과시킨 뒤 커밋, push, `develop`으로 PR을 연다. PR에는 `ai:in-progress` 라벨이 붙는다.
+3. `AI implement` 워크플로에서 Claude가 브랜치를 만들어 구현하고, 검사를 통과시킨 뒤 커밋, push하고 PR 제목과 본문을 쓴다. 다음 단계가 `MAINTAINER_PR_TOKEN`으로 메인테이너 계정의 PR을 `develop`에 연다. Codex 자동 리뷰는 메인테이너가 연 PR에만 붙는다. PR에는 `ai:in-progress` 라벨이 붙는다.
 4. Codex 자동 리뷰가 PR의 현재 커밋을 검토한다. 검토 기준은 루트 `AGENTS.md`의 "Review guidelines"다.
 5. `AI review loop` 워크플로가 결과를 판단한다.
    - 현재 커밋에 Codex 지적이 있거나 CI가 실패하면 Claude가 고치고 같은 브랜치에 push한다. push하면 Codex가 다시 검토한다. 회차마다 `ai:round-N` 라벨이 붙는다.
@@ -39,6 +39,7 @@
 - 지적 처리 표시(`ai-handled`)는 `claude[bot]`이 남긴 댓글만 인정한다.
 - 같은 이슈에 열린 PR이 있으면 새 구현을 시작하지 않는다.
 - 머지는 사용자만 한다.
+- `MAINTAINER_PR_TOKEN`은 이 저장소만 대상으로 한 fine-grained token이다. 권한은 Pull requests, Issues 읽기/쓰기와 Contents 읽기뿐이라 push와 머지는 할 수 없다. 이 토큰은 PR을 여는 단계에서만 쓰고 Claude 단계에는 넘기지 않는다.
 
 ## 작업 시작
 
