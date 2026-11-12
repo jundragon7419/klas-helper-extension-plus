@@ -228,6 +228,37 @@ describe.skipIf(!hasBash)('request-codex.sh', () => {
     expect(log).not.toContain('[maintainer-token] api -X POST');
   });
 
+  it('PR에서는 연결된 이슈의 질문까지 세어 횟수를 넘으면 바로 알린다', () => {
+    const toLine = (c: { id: number; login: string; body: string }) =>
+      JSON.stringify({ id: c.id, login: c.login, body: c.body });
+    const thread = join(root, 'pr-thread.jsonl');
+    const history = join(root, 'issue-thread.jsonl');
+    writeFileSync(thread, toLine(ask('질문 C')) + '\n');
+    writeFileSync(history, [ask('질문 A'), ask('질문 B')].map(toLine).join('\n') + '\n');
+    writeFileSync(
+      join(bin, 'gh'),
+      [
+        '#!/usr/bin/env bash',
+        'echo "[$GH_TOKEN] $*" >> "$GH_CALLS"',
+        'case "$*" in',
+        '  *"issues/105 --jq"*) echo pr ;;',
+        '  *"pulls/105 --jq .head.ref"*) echo feat/104-hide-lectures ;;',
+        `  *"issues/104/comments --paginate"*) cat "${history}" ;;`,
+        `  *"issues/105/comments --paginate"*) cat "${thread}" ;;`,
+        'esac',
+        'exit 0',
+      ].join('\n') + '\n',
+    );
+
+    const result = run({});
+
+    expect(result.status, result.stderr).toBe(0);
+    const log = readFileSync(calls, 'utf8');
+    expect(log).toContain('repos/owner/repo/issues/104/comments --paginate');
+    expect(log).toContain('질문이 2회를 넘음');
+    expect(log).not.toContain('[maintainer-token] api -X POST');
+  });
+
   it('ask가 너무 많으면 Codex에게 요청하지 않고 바로 알린다', () => {
     threadGh(
       Array.from({ length: MAX_ASKS + 1 }, (_, i) => {
@@ -423,6 +454,36 @@ describe('decideRelayTarget', () => {
       target: 'user',
       reason: '마지막 Claude 메시지가 report임',
     });
+  });
+
+  it('이미 Codex 답을 받은 질문은 다시 넘기지 않고 사용자에게 알린다', () => {
+    const a = ask();
+    expect(decideRelayTarget({ comments: [a, answer(a.id)], roles })).toMatchObject({
+      target: 'user',
+      askId: a.id,
+      reason: 'Claude가 새 메시지 없이 멈춤(마지막 질문은 이미 답을 받음)',
+    });
+    expect(decideRelayTarget({ comments: [a, needUser(a.id)], roles }).target).toBe('user');
+    // 답을 받은 뒤 새 질문을 하면 그 질문을 넘긴다.
+    const next = ask('다른 질문');
+    expect(decideRelayTarget({ comments: [a, answer(a.id), next], roles })).toMatchObject({
+      target: 'codex',
+      askId: next.id,
+    });
+  });
+
+  it('질문 횟수와 반복은 연결된 이슈의 질문까지 합쳐 센다', () => {
+    const issueAsks = [ask('질문 A'), ask('질문 B')];
+    const prAsk = ask('질문 C');
+    expect(decideRelayTarget({ comments: [prAsk], history: issueAsks, roles })).toMatchObject({
+      target: 'user',
+      reason: `질문이 ${MAX_ASKS}회를 넘음`,
+    });
+    const repeat = ask('질문 A');
+    expect(
+      decideRelayTarget({ comments: [repeat], history: [issueAsks[0]!], roles }),
+    ).toMatchObject({ target: 'user', reason: '같은 질문이 반복됨' });
+    expect(decideRelayTarget({ comments: [prAsk], history: [], roles }).target).toBe('codex');
   });
 
   it('다른 계정이 쓴 ask는 세지 않는다', () => {

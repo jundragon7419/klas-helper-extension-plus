@@ -11,6 +11,20 @@ const BLOCKING_BADGE = /!\[P[01] Badge\]/;
 const BLOCKING_TAG = /\[P[01]\]/g;
 
 /**
+ * ai-msg 메시지인지 본다. 표시 줄은 첫 줄, 또는 멘션 줄 다음 줄에만 온다(AGENTS.md "AI 메시지 형식").
+ * 리뷰 본문 안에 인용한 표시 줄 예시는 메시지가 아니다.
+ */
+function isAiMessage(body) {
+  if (parseMessage(body) !== null) return true;
+  const [first = '', second = ''] = body
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim());
+  const header = /^<!--\s*ai-msg\b/i;
+  return header.test(first) || (/^@(claude|codex)$/.test(first) && header.test(second));
+}
+
+/**
  * Codex가 리뷰를 GitHub 리뷰가 아닌 작업 결과 댓글로 남긴 경우(`View task →` 링크가 있는 일반 댓글).
  * 현재 head의 파일 링크(`/blob/<head>/`)가 있어야 현재 커밋을 본 것으로 인정한다.
  * ai-msg 메시지, 요약 상태 댓글, 리뷰 응답 댓글은 제외한다.
@@ -23,8 +37,7 @@ function taskReviews({ head, comments, codexBot }) {
       c.body.includes(`/blob/${head}/`) &&
       !c.body.includes('codex-review-state') &&
       !c.body.includes('codex-review-receipt') &&
-      !/<!--\s*ai-msg/i.test(c.body) &&
-      parseMessage(c.body) === null,
+      !isAiMessage(c.body),
   );
 }
 

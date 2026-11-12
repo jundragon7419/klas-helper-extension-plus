@@ -23,7 +23,11 @@ export interface ThreadComment {
   body: string;
 }
 
-export function decideRelayTarget(input: { comments: ThreadComment[]; roles: Roles }): {
+export function decideRelayTarget(input: {
+  comments: ThreadComment[];
+  history?: ThreadComment[];
+  roles: Roles;
+}): {
   target: 'codex' | 'user';
   askId: number | null;
   reason: string;

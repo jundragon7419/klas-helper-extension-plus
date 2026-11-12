@@ -4,7 +4,8 @@
 //
 // CLI
 //   node scripts/ai/relay.js body <kind> <runUrl> <key> [askId]   Codex 요청 본문 출력
-//   node scripts/ai/relay.js plan <comments.jsonl>                Codex에게 넘길지 사용자에게 바로 알릴지 JSON 출력
+//   node scripts/ai/relay.js plan <comments.jsonl> [history.jsonl] Codex에게 넘길지 사용자에게 바로 알릴지 JSON 출력
+//                                                                  (history: PR이 닫는 이슈의 댓글)
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { validateMessage } from './ai-msg.js';
@@ -103,13 +104,28 @@ function lastClaudeMessage(comments, roles) {
   return last;
 }
 
+/** Codex가 이미 answer나 need-user로 답한 Claude 메시지 ID. */
+function answeredIds(comments, roles) {
+  const ids = new Set();
+  for (const c of comments) {
+    if (!roles.codex.includes(c.login)) continue;
+    const { message, errors } = validateMessage(c, roles);
+    if (message && errors.length === 0 && ['answer', 'need-user'].includes(message.meta.type)) {
+      ids.add(Number(message.meta['reply-to']));
+    }
+  }
+  return ids;
+}
+
 /**
  * Claude가 멈췄을 때 Codex에게 넘길지, 사용자에게 바로 알릴지 정한다.
- * Codex에게는 Claude의 형식에 맞는 최신 ask나 objection만 넘긴다. Codex 답은 그 메시지를 reply-to로 가리켜야 하기 때문이다.
- * @param {{comments: {id: number, login: string, body: string}[], roles: ReturnType<typeof rolesOf>}} input
+ * Codex에게는 Claude의 형식에 맞는 최신 ask나 objection 중 아직 답이 없는 것만 넘긴다.
+ * Codex 답은 그 메시지를 reply-to로 가리켜야 하고, 이미 답한 질문을 다시 넘기면 새 실패와 무관한 답으로 재시작하게 된다.
+ * 질문 횟수와 반복은 이슈 전체로 센다. PR 스레드에서 부를 때는 연결된 이슈의 댓글을 history로 넘긴다.
+ * @param {{comments: {id: number, login: string, body: string}[], history?: {id: number, login: string, body: string}[], roles: ReturnType<typeof rolesOf>}} input
  * @returns {{target: 'codex' | 'user', askId: number | null, reason: string, errors: string[]}}
  */
-export function decideRelayTarget({ comments, roles }) {
+export function decideRelayTarget({ comments, history = [], roles }) {
   const latest = lastClaudeMessage(comments, roles);
   if (!latest) {
     return {
@@ -131,8 +147,16 @@ export function decideRelayTarget({ comments, roles }) {
   if (!stopTypes.includes(type)) {
     return { target: 'user', askId: null, reason: `마지막 Claude 메시지가 ${type}임`, errors: [] };
   }
+  if (answeredIds(comments, roles).has(latest.id)) {
+    return {
+      target: 'user',
+      askId: latest.id,
+      reason: 'Claude가 새 메시지 없이 멈춤(마지막 질문은 이미 답을 받음)',
+      errors: [],
+    };
+  }
   if (type === 'ask') {
-    const asks = stopMessages(comments, roles).filter((s) => s.type === 'ask');
+    const asks = stopMessages([...history, ...comments], roles).filter((s) => s.type === 'ask');
     if (asks.length > MAX_ASKS) {
       return {
         target: 'user',
@@ -268,11 +292,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     );
   } else if (command === 'plan') {
     const comments = readCommentLines(readFileSync(args[0], 'utf8'));
+    const history = args[1] ? readCommentLines(readFileSync(args[1], 'utf8')) : [];
     const roles = rolesOf({
       codexBot: process.env.CODEX_BOT ?? 'chatgpt-codex-connector[bot]',
       claudeBot: process.env.CLAUDE_BOT ?? 'claude[bot]',
       maintainer: process.env.MAINTAINER ?? '',
     });
-    process.stdout.write(JSON.stringify(decideRelayTarget({ comments, roles })) + '\n');
+    process.stdout.write(JSON.stringify(decideRelayTarget({ comments, history, roles })) + '\n');
   }
 }

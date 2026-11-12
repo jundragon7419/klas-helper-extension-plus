@@ -30,7 +30,17 @@ tmp=${RUNNER_TEMP:-/tmp}
 # Claude가 남긴 ask/objection을 찾고, 질문 횟수와 반복을 보고 Codex에게 넘길지 정한다.
 GH_TOKEN="$ACTIONS_TOKEN" gh api "repos/$GH_REPO/issues/$TARGET/comments" --paginate \
   --jq '.[] | {id, login: .user.login, body}' > "$tmp/thread.jsonl"
-plan=$(MAINTAINER="$MAINTAINER" node "$here/relay.js" plan "$tmp/thread.jsonl")
+# PR이면 연결된 이슈(브랜치 이름의 번호)의 댓글도 읽어 질문 횟수를 이슈 전체로 센다.
+: > "$tmp/history.jsonl"
+head_ref=$(GH_TOKEN="$ACTIONS_TOKEN" gh api "repos/$GH_REPO/issues/$TARGET" --jq 'if .pull_request then "pr" else "" end')
+if [ "$head_ref" = pr ]; then
+  head_ref=$(GH_TOKEN="$ACTIONS_TOKEN" gh api "repos/$GH_REPO/pulls/$TARGET" --jq .head.ref)
+  if [[ "$head_ref" =~ ^[a-z]+/([1-9][0-9]*)- ]]; then
+    GH_TOKEN="$ACTIONS_TOKEN" gh api "repos/$GH_REPO/issues/${BASH_REMATCH[1]}/comments" --paginate \
+      --jq '.[] | {id, login: .user.login, body}' > "$tmp/history.jsonl"
+  fi
+fi
+plan=$(MAINTAINER="$MAINTAINER" node "$here/relay.js" plan "$tmp/thread.jsonl" "$tmp/history.jsonl")
 target=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).target)' "$plan")
 ask_id=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).askId ?? ""))' "$plan")
 reason=$(node -e 'const p = JSON.parse(process.argv[1]); process.stdout.write([p.reason, ...p.errors].join(" / ").replace(/<!--/g, "&lt;!--").replace(/-->/g, "--&gt;"))' "$plan")

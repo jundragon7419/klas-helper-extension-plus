@@ -108,6 +108,24 @@ describe('decideGate', () => {
     expect(decideGate(input({ comments: [taskReview(OLD, ['P1'])] })).state).toBe('pending');
   });
 
+  it('본문에 ai-msg 표시 줄 예시를 인용한 작업 결과 리뷰도 검사한다', () => {
+    const quoted = taskReview(HEAD, ['P1']);
+    const inline = {
+      ...quoted,
+      body: quoted.body.replace(
+        '## 검토 결과',
+        '## 검토 결과\n\n`<!-- ai-msg:v1 type=ask issue= -->` 같은 줄',
+      ),
+    };
+    const fenced = {
+      ...quoted,
+      body: `${quoted.body}\n\n\`\`\`text\n<!-- ai-msg:v1 type=answer issue=1 -->\n\`\`\``,
+    };
+    for (const c of [inline, fenced]) {
+      expect(decideGate(input({ comments: [c] })).state).toBe('failure');
+    }
+  });
+
   it('ai-msg 메시지와 다른 계정의 댓글은 작업 결과 리뷰로 보지 않는다', () => {
     const msg = {
       login: CODEX,
