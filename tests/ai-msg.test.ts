@@ -71,6 +71,22 @@ describe('formatMessage와 parseMessage', () => {
 
   it('알 수 없는 종류로는 만들지 않는다', () => {
     expect(() => formatMessage({ type: 'hello' }, {})).toThrow('알 수 없는 메시지 종류');
+    expect(() => formatMessage({ type: 'constructor' }, {})).toThrow('알 수 없는 메시지 종류');
+  });
+
+  it('코드 블록 안의 ### 줄은 절 제목으로 보지 않는다', () => {
+    const question = '- 아래처럼 써도 되는가?\n```md\n### 단계\n예시\n```\n- 끝';
+    const body = formatMessage(
+      { type: 'ask', issue: 1 },
+      { 단계: '구현 전', 질문: question, '확인한 것': 'x' },
+    );
+    const message = parseMessage(body)!;
+    expect(message.fields['단계']).toBe('구현 전');
+    expect(message.fields['질문']).toBe(question);
+    expect(message.duplicates).toEqual([]);
+
+    const tilde = body.replace(/```md/, '~~~').replace(/```\n- 끝/, '~~~\n- 끝');
+    expect(parseMessage(tilde)!.fields['단계']).toBe('구현 전');
   });
 });
 
@@ -85,6 +101,46 @@ describe('validateMessage', () => {
 
   it('표시 줄이 없는 댓글은 오류 없이 무시한다', () => {
     expect(check(CLAUDE, '고침: 무엇을')).toEqual({ message: null, errors: [] });
+  });
+
+  it.each([
+    ['값이 비어 있음', '<!-- ai-msg:v1 type=ask issue= -->'],
+    ['값 사이에 공백', '<!-- ai-msg:v1 type=ask issue= 1 -->'],
+    ['닫는 표시 없음', '<!-- ai-msg:v1 type=ask issue=1'],
+    [
+      '멘션 다음 줄의 잘못된 표시 줄',
+      '@claude\n<!-- ai-msg:v1 type=start issue=1 rev=0 reply-to= -->',
+    ],
+  ])('표시 줄 문법이 틀리면(%s) 오류로 알린다', (_, body) => {
+    const result = check(CLAUDE, body);
+    expect(result.message).toBeNull();
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('표시 줄 문법이 다릅니다');
+  });
+
+  it('표시 줄이 셋째 줄 이후에 있으면 오류로 알리고, 코드 블록 안이면 무시한다', () => {
+    const header = formatHeader({ type: 'ask', issue: 1 });
+    expect(check(CLAUDE, `안녕하세요\n\n${header}`).errors).toEqual([
+      '표시 줄은 첫 줄, 또는 호출 멘션 바로 다음 줄에 있어야 합니다.',
+    ]);
+    const fence = '`'.repeat(3);
+    expect(check(CLAUDE, `예시입니다.\n\n${fence}text\n${header}\n${fence}`)).toEqual({
+      message: null,
+      errors: [],
+    });
+  });
+
+  it('상속된 속성 이름의 종류도 알 수 없는 종류로 알린다', () => {
+    for (const type of ['constructor', 'toString', '__proto__']) {
+      expect(check(CLAUDE, `<!-- ai-msg:v1 type=${type} issue=1 -->`).errors).toEqual([
+        `알 수 없는 메시지 종류: ${type}`,
+      ]);
+    }
+  });
+
+  it('상속된 속성 이름의 절 제목도 한 번이면 중복이 아니다', () => {
+    const body = formatMessage({ type: 'ask', issue: 1 }, { ...fill('ask'), constructor: 'x' });
+    expect(check(CLAUDE, body).errors).toEqual([]);
   });
 
   it('필수 절이 없거나 비어 있으면 실패한다', () => {

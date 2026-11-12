@@ -91,6 +91,11 @@ const VALUE_RE = {
   'reply-to': /^[1-9]\d*$/,
 };
 const MENTION_RE = /^@(claude|codex)\b/;
+const HEADER_START = '<!-- ai-msg:';
+const FENCE_RE = /^\s*(```|~~~)/;
+
+/** 실제로 정의된 종류만 찾는다. `constructor` 같은 상속 속성은 종류가 아니다. */
+const specOf = (type) => (Object.hasOwn(MESSAGE_TYPES, type) ? MESSAGE_TYPES[type] : undefined);
 
 /** 표시 줄을 만든다. 없는 값은 `-`로 채운다. */
 export function formatHeader(meta) {
@@ -100,7 +105,7 @@ export function formatHeader(meta) {
 
 /** 메시지 본문을 만든다. 종류에 호출 멘션이 있으면 첫 줄에 둔다. */
 export function formatMessage(meta, fields) {
-  const spec = MESSAGE_TYPES[meta.type];
+  const spec = specOf(meta.type);
   if (!spec) throw new Error(`알 수 없는 메시지 종류: ${meta.type}`);
   const lines = [];
   if (spec.mention) lines.push(spec.mention);
@@ -112,20 +117,53 @@ export function formatMessage(meta, fields) {
 }
 
 /**
- * 댓글 본문에서 메시지를 읽는다. 표시 줄이 없으면 null.
- * 표시 줄은 첫 줄, 또는 호출 멘션 줄 바로 다음 줄에 있어야 한다.
+ * 표시 줄의 위치를 찾는다.
+ * - none: ai-msg 메시지가 아닌 일반 댓글
+ * - ok: 첫 줄, 또는 호출 멘션 바로 다음 줄에 올바른 표시 줄이 있음
+ * - malformed: `<!-- ai-msg:`로 시작하는 줄이 있지만 문법이나 위치가 틀림
+ */
+function locateHeader(lines) {
+  const first = (lines[0] ?? '').trim();
+  const second = (lines[1] ?? '').trim();
+  let index = 0;
+  let mention = null;
+  if (MENTION_RE.test(first) && second.startsWith(HEADER_START)) {
+    mention = first.split(/\s/)[0];
+    index = 1;
+  }
+  const line = (lines[index] ?? '').trim();
+  if (line.startsWith(HEADER_START)) {
+    const header = HEADER_RE.exec(line);
+    return header
+      ? { status: 'ok', index, mention, header }
+      : { status: 'malformed', reason: `표시 줄 문법이 다릅니다: ${line}` };
+  }
+  // 코드 블록 밖의 셋째 줄 이후에 표시 줄이 있으면 위치가 틀린 메시지다.
+  let fenced = false;
+  for (const raw of lines) {
+    if (FENCE_RE.test(raw)) fenced = !fenced;
+    else if (!fenced && raw.trim().startsWith(HEADER_START)) {
+      return {
+        status: 'malformed',
+        reason: '표시 줄은 첫 줄, 또는 호출 멘션 바로 다음 줄에 있어야 합니다.',
+      };
+    }
+  }
+  return { status: 'none' };
+}
+
+const splitLines = (body) => (body ?? '').replace(/\r\n/g, '\n').split('\n');
+
+/**
+ * 댓글 본문에서 메시지를 읽는다. 메시지가 아니거나 표시 줄이 틀리면 null.
+ * 코드 블록(``` 또는 ~~~) 안의 `### ` 줄은 절 제목으로 보지 않는다.
  * @returns {null | {version: string, mention: string | null, meta: Record<string, string>, fields: Record<string, string>, duplicates: string[]}}
  */
 export function parseMessage(body) {
-  const lines = (body ?? '').replace(/\r\n/g, '\n').split('\n');
-  let index = 0;
-  let mention = null;
-  if (MENTION_RE.test(lines[0] ?? '') && HEADER_RE.test((lines[1] ?? '').trim())) {
-    mention = lines[0].trim().split(/\s/)[0];
-    index = 1;
-  }
-  const header = HEADER_RE.exec((lines[index] ?? '').trim());
-  if (!header) return null;
+  const lines = splitLines(body);
+  const found = locateHeader(lines);
+  if (found.status !== 'ok') return null;
+  const { index, mention, header } = found;
 
   const meta = {};
   for (const pair of header[2].trim().split(' ').filter(Boolean)) {
@@ -136,11 +174,13 @@ export function parseMessage(body) {
   const fields = {};
   const duplicates = [];
   let current = null;
+  let fenced = false;
   for (const line of lines.slice(index + 1)) {
-    const heading = /^### (.+?)\s*$/.exec(line);
+    const heading = fenced ? null : /^### (.+?)\s*$/.exec(line);
+    if (FENCE_RE.test(line)) fenced = !fenced;
     if (heading) {
       current = heading[1];
-      if (current in fields) duplicates.push(current);
+      if (Object.hasOwn(fields, current)) duplicates.push(current);
       fields[current] = '';
     } else if (current !== null) {
       fields[current] += `${line}\n`;
@@ -154,9 +194,12 @@ export function parseMessage(body) {
  * 댓글 하나를 검사한다.
  * @param {{login: string, body: string}} comment
  * @param {{codex: string[], claude: string[], maintainer: string[]}} roles 역할별 계정
- * @returns {{message: ReturnType<typeof parseMessage>, errors: string[]}} 표시 줄이 없으면 message는 null, errors는 비어 있다.
+ * @returns {{message: ReturnType<typeof parseMessage>, errors: string[]}}
+ *   일반 댓글이면 message는 null, errors는 비어 있다. 표시 줄이 틀리면 message는 null, errors에 이유가 있다.
  */
 export function validateMessage(comment, roles) {
+  const found = locateHeader(splitLines(comment.body));
+  if (found.status === 'malformed') return { message: null, errors: [found.reason] };
   const message = parseMessage(comment.body);
   if (!message) return { message: null, errors: [] };
   const errors = [];
@@ -168,7 +211,7 @@ export function validateMessage(comment, roles) {
   const unknown = Object.keys(message.meta).filter((key) => !HEADER_KEYS.includes(key));
   if (unknown.length) errors.push(`알 수 없는 표시 값: ${unknown.join(', ')}`);
 
-  const spec = MESSAGE_TYPES[message.meta.type];
+  const spec = specOf(message.meta.type);
   if (!spec) {
     errors.push(`알 수 없는 메시지 종류: ${message.meta.type ?? '(없음)'}`);
     return { message, errors };
