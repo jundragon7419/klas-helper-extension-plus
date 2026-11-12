@@ -1,0 +1,66 @@
+# 자동 흐름이 멈춰 Codex에게 정리를 맡긴 이슈나 PR(라벨 ai:needs-human)에서,
+# Codex 정리 댓글이 오면 메인테이너에게 알린다. 30분 안에 오지 않으면 그대로 알린다.
+# 흐름 전체는 docs/AI-COLLABORATION.md "멈췄을 때"를 따른다.
+name: AI relay
+
+on:
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  CODEX_BOT: chatgpt-codex-connector[bot]
+  MAINTAINER: jundragon7419
+
+# 예약 실행과 댓글 실행이 같은 항목에 알림을 두 번 달지 않도록 한 줄로 세운다.
+concurrency:
+  group: ai-relay
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event.comment.user.login == 'chatgpt-codex-connector[bot]' &&
+      contains(github.event.issue.labels.*.name, 'ai:needs-human'))
+    runs-on: ubuntu-latest
+    steps:
+      # 판단 코드는 항상 기본 브랜치에서 읽는다.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: scripts/ai
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { decidePing, pingBody } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/relay.js`);
+            const repo = context.repo;
+            const numbers = context.eventName === 'schedule'
+              ? (await github.paginate(github.rest.issues.listForRepo, { ...repo, state: 'open', labels: 'ai:needs-human', per_page: 100 }))
+                  .map((i) => i.number)
+              : [context.payload.issue.number];
+
+            for (const number of numbers) {
+              const comments = (await github.paginate(github.rest.issues.listComments, { ...repo, issue_number: number, per_page: 100 }))
+                .map((c) => ({ login: c.user?.login ?? '', body: c.body ?? '', createdAt: c.created_at }));
+              const d = decidePing({
+                comments,
+                now: Date.now(),
+                codexBot: process.env.CODEX_BOT,
+                maintainer: process.env.MAINTAINER,
+                pingBot: 'github-actions[bot]',
+              });
+              core.info(`#${number}: ${d.ping ?? 'none'}`);
+              if (!d.ping) continue;
+              await github.rest.issues.createComment({
+                ...repo, issue_number: number,
+                body: pingBody(d.ping, { maintainer: process.env.MAINTAINER, key: d.key }),
+              });
+            }
