@@ -178,6 +178,20 @@ describe('decideReview', () => {
     expect(d).toMatchObject({ action: 'stop', addLabels: ['ai:needs-human'] });
   });
 
+  it('ready에서 회차 제한으로 멈추면 in-progress로 되돌린다', () => {
+    const d = decideReview(
+      input({
+        labels: ['ai:ready', 'ai:round-1', 'ai:round-2', 'ai:round-3'],
+        reviews: [review()],
+      }),
+    );
+    expect(d).toMatchObject({
+      action: 'stop',
+      addLabels: ['ai:needs-human', 'ai:in-progress'],
+      removeLabels: ['ai:ready'],
+    });
+  });
+
   it('멈춘 PR, 자동 흐름이 아닌 PR, 닫힌 PR, 다른 저장소 PR은 판단하지 않는다', () => {
     for (const over of [
       { labels: ['ai:in-progress', 'ai:needs-human'] },

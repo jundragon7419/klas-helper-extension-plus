@@ -14,7 +14,8 @@
 3. `AI implement` 워크플로에서 Claude가 브랜치를 만들어 구현하고, 검사를 통과시킨 뒤 커밋, push하고 PR 제목과 본문을 쓴다. 다음 단계가 `MAINTAINER_PR_TOKEN`으로 메인테이너 계정의 PR을 `develop`에 연다. Codex 자동 리뷰는 메인테이너가 연 PR에만 붙는다. PR에는 `ai:in-progress` 라벨이 붙는다.
 4. Codex 자동 리뷰가 PR의 현재 커밋을 검토한다. 검토 기준은 루트 `AGENTS.md`의 "Review guidelines"다.
 5. `AI review loop` 워크플로가 결과를 판단한다.
-   - 현재 커밋에 Codex 지적이 있거나 CI가 실패하면 Claude가 고치고 같은 브랜치에 push한다. push하면 Codex가 다시 검토한다. 회차마다 `ai:round-N` 라벨이 붙는다.
+   - 현재 커밋에 Codex 지적이 있거나 CI가 실패하면 Claude가 고쳐서 커밋한다. Claude는 push하지 않는다. 다음 작업(`push-fix`)이 커밋을 검사하고 `MAINTAINER_PR_TOKEN`으로 같은 브랜치에 push한 뒤, Codex는 push를 스스로 다시 검토하지 않으므로 `@codex review`를 달아 재검토를 요청한다. 회차마다 `ai:round-N` 라벨이 붙는다.
+   - 검토 반영을 메인테이너 토큰으로 push하는 이유: `GITHUB_TOKEN`으로 push하면 그 push로 시작되는 CI와 AI review loop가 승인 대기 상태가 되어 사용자가 직접 승인해야 한다.
    - Codex 요약 댓글의 상태 표시(`codex-review-state`)가 현재 커밋의 검토 완료를 가리키고, 그 커밋에 Codex 지적이 없고, CI `check`가 성공하면 `ai:ready`로 바꾸고 사용자를 호출한다. 그 뒤에 지적이 도착하면 `ai:in-progress`로 되돌리고 고친다.
 6. 사용자가 PR과 "KLAS에서 직접 확인할 항목"을 확인하고 PR 본문의 Squash 커밋 메시지로 머지한다.
 
@@ -52,8 +53,9 @@ Codex 리뷰가 오지 않는 경우(3시간 무응답)는 Codex에게 요청하
 - 지적 처리 표시(`ai-handled`)는 `claude[bot]`이 남긴 댓글만 인정한다.
 - 같은 이슈에 열린 PR이 있으면 새 구현을 시작하지 않는다.
 - 머지는 사용자만 한다.
-- 자동 흐름의 Claude는 `.github/workflows/` 파일을 push할 수 없다(GitHub App에 workflows 권한을 주지 않는다). 워크플로 변경은 수동 방식으로 한다.
-- `MAINTAINER_PR_TOKEN`은 이 저장소만 대상으로 한 fine-grained token이다. 권한은 Pull requests, Issues 읽기/쓰기와 Contents 읽기뿐이라 push와 머지는 할 수 없다. 이 토큰은 PR 열기와 Codex 정리 요청에만 쓴다.
+- 자동 흐름의 Claude는 `.github/workflows/` 파일을 push할 수 없다(GitHub App에 workflows 권한을 주지 않는다). 검토 반영 단계의 Claude는 아예 push하지 않고, `push-fix`가 다음을 확인한 커밋만 push한다: 작업 브랜치 이름 규칙에 맞음, Claude 작업 중 원격 브랜치가 바뀌지 않음, 작업 전 커밋에서 fast-forward로 이어짐, `.github/workflows/` 변경 없음(`scripts/ai/push-fix.sh`). 워크플로 변경은 수동 방식으로 한다.
+- `MAINTAINER_PR_TOKEN`은 이 저장소만 대상으로 한 fine-grained token이다. 권한은 Contents, Pull requests, Issues 읽기/쓰기이고 Workflows 권한은 없다. `develop`과 `main`은 ruleset이 직접 push를 막고 머지는 사용자만 하므로, 이 토큰으로 할 수 있는 push는 작업 브랜치뿐이다. 이 토큰은 PR 열기, 검토 반영 push, Codex 재검토 요청, Codex 정리 요청에만 쓴다.
+- Codex 정리 요청을 이 토큰으로 달지 못하면(토큰 만료, 권한 부족) `request-codex.sh`가 Actions 토큰으로 사용자에게 바로 알린다.
 - 이 토큰을 쓰는 작업과 판단 코드(`scripts/ai/`)는 Claude가 건드린 작업 공간이나 PR 브랜치가 아니라, 기본 브랜치를 새로 체크아웃한 작업에서 실행한다. 이슈나 PR 내용에 심어진 지시로 Claude가 파일을 바꿔도 토큰에 닿지 못하게 하기 위함이다.
 - 공개 저장소라 누구나 댓글을 달 수 있다. 판단에 쓰는 표시(`ai-handled`, `codex-review-state`, `ai-relay`, `ai-pinged`)는 정해진 계정이 단 댓글만 인정한다.
 

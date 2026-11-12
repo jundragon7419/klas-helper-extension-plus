@@ -13,12 +13,20 @@ here=$(dirname "$0")
 # 이슈와 PR 모두 issues API로 다룬다.
 GH_TOKEN="$ACTIONS_TOKEN" gh api -X POST "repos/$GH_REPO/issues/$TARGET/labels" -f "labels[]=ai:needs-human" > /dev/null
 
-if [ -z "${GH_TOKEN:-}" ]; then
-  echo "::warning::MAINTAINER_PR_TOKEN이 없어 Codex 요청 없이 바로 알립니다."
+# Codex에게 요청하지 못하면 ai-relay의 알림도 오지 않으므로 바로 알린다.
+notify_now() {
+  echo "::warning::$1"
   GH_TOKEN="$ACTIONS_TOKEN" gh api -X POST "repos/$GH_REPO/issues/$TARGET/comments" \
     -f body="@$MAINTAINER 자동 흐름이 멈췄습니다. 위 Claude 보고와 실행 기록($RUN_URL)을 확인해 주세요." > /dev/null
+}
+
+if [ -z "${GH_TOKEN:-}" ]; then
+  notify_now "MAINTAINER_PR_TOKEN이 없어 Codex 요청 없이 바로 알립니다."
   exit 0
 fi
 
 node "$here/relay.js" body "$KIND" "$RUN_URL" "$KEY" > "${RUNNER_TEMP:-/tmp}/codex-request.md"
-gh api -X POST "repos/$GH_REPO/issues/$TARGET/comments" -F "body=@${RUNNER_TEMP:-/tmp}/codex-request.md" > /dev/null
+if ! gh api -X POST "repos/$GH_REPO/issues/$TARGET/comments" -F "body=@${RUNNER_TEMP:-/tmp}/codex-request.md" > /dev/null; then
+  # 토큰이 만료됐거나 권한이 부족한 경우. ai-implement의 PR 열기가 같은 이유로 실패했을 때도 여기로 온다.
+  notify_now "MAINTAINER_PR_TOKEN으로 Codex 요청을 달지 못해 바로 알립니다."
+fi

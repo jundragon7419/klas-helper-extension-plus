@@ -170,4 +170,91 @@ describe.skipIf(!hasBash)('request-codex.sh', () => {
       `[actions-token] api -X POST repos/owner/repo/issues/105/comments -f body=@${ME}`,
     );
   });
+
+  it('메인테이너 토큰으로 요청을 달지 못하면 Actions 토큰으로 바로 알린다', () => {
+    writeFileSync(
+      join(bin, 'gh'),
+      '#!/usr/bin/env bash\necho "[$GH_TOKEN] $*" >> "$GH_CALLS"\n[ "$GH_TOKEN" = maintainer-token ] && exit 1\nexit 0\n',
+    );
+
+    const result = run({});
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('Codex 요청을 달지 못해');
+    expect(readFileSync(calls, 'utf8')).toContain(
+      `[actions-token] api -X POST repos/owner/repo/issues/105/comments -f body=@${ME}`,
+    );
+  });
+});
+
+// request-review.sh: 검토 반영이 push됐을 때만 메인테이너 계정으로 "@codex review"를 단다.
+describe.skipIf(!hasBash)('request-review.sh', () => {
+  let root: string;
+  let calls: string;
+  let bin: string;
+
+  const run = (env: Record<string, string>) =>
+    spawnSync('bash', [resolve('scripts/ai/request-review.sh')], {
+      encoding: 'utf8',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: root,
+        GH_CALLS: calls,
+        GH_REPO: 'owner/repo',
+        PR: '111',
+        BEFORE: 'a'.repeat(40),
+        NOW_SHA: 'b'.repeat(40),
+        GH_TOKEN: 'maintainer-token',
+        ACTIONS_TOKEN: 'actions-token',
+        ...env,
+      },
+    });
+  const readCalls = () => {
+    try {
+      return readFileSync(calls, 'utf8');
+    } catch {
+      return '';
+    }
+  };
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'request-review-'));
+    bin = join(root, 'bin');
+    calls = join(root, 'calls.log');
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, 'gh'),
+      '#!/usr/bin/env bash\necho "[$GH_TOKEN] $*" >> "$GH_CALLS"\n[[ "$*" == *".head.sha"* ]] && echo "$NOW_SHA"\nexit 0\n',
+    );
+    chmodSync(join(bin, 'gh'), 0o755);
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('head가 바뀌었으면 메인테이너 토큰으로 재검토를 요청한다', () => {
+    const result = run({});
+
+    expect(result.status).toBe(0);
+    expect(readCalls()).toContain('[actions-token] api repos/owner/repo/pulls/111 --jq .head.sha');
+    expect(readCalls()).toContain(
+      '[maintainer-token] api -X POST repos/owner/repo/issues/111/comments -f body=@codex review',
+    );
+  });
+
+  it('head가 그대로면 요청하지 않는다', () => {
+    const result = run({ NOW_SHA: 'a'.repeat(40) });
+
+    expect(result.status).toBe(0);
+    expect(readCalls()).not.toContain('comments');
+  });
+
+  it('메인테이너 토큰이 없으면 요청하지 않고 경고만 남긴다', () => {
+    const result = run({ GH_TOKEN: '' });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('MAINTAINER_PR_TOKEN');
+    expect(readCalls()).not.toContain('comments');
+  });
 });
