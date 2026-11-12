@@ -1,7 +1,7 @@
 import { parseHTML } from 'linkedom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { lessonTimeRange } from '@/utils/lesson-time';
-import { showLessonTimes } from '@/utils/ui/lesson-time';
+import { showLessonTimes, watchLessonTimes } from '@/utils/ui/lesson-time';
 
 describe('lessonTimeRange', () => {
   it('단일 교시의 시작과 종료 시각을 돌려준다', () => {
@@ -131,5 +131,65 @@ describe('showLessonTimes', () => {
     );
     showLessonTimes(doc);
     expect(ranges()).toHaveLength(2);
+  });
+});
+
+describe('watchLessonTimes', () => {
+  let doc: Document;
+  let stop: (() => void) | undefined;
+  const load = (html: string) => {
+    const { document, window } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
+    doc = document;
+    vi.stubGlobal('document', doc);
+    vi.stubGlobal('MutationObserver', window.MutationObserver);
+  };
+  const ranges = () =>
+    [...doc.querySelectorAll('[data-khp-lesson-time]')].map((el) =>
+      el.getAttribute('data-khp-lesson-time'),
+    );
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+  afterEach(() => {
+    stop?.();
+    stop = undefined;
+    vi.unstubAllGlobals();
+  });
+
+  it('수업 class가 바뀌면 시간을 다시 계산한다', async () => {
+    load(table([['1', lesson('namecol01 lessontime1')]]));
+    stop = watchLessonTimes(doc.body);
+    await settle();
+    expect(ranges()).toEqual(['09:00 ~ 10:15']);
+    doc.querySelector('.namecol01')!.className = 'namecol01 lessontime2';
+    await settle();
+    expect(ranges()).toEqual(['09:00 ~ 11:45']);
+  });
+
+  it('기존 교시 텍스트 노드 값이 바뀌면 시간을 다시 계산한다', async () => {
+    load(table([['1', lesson('namecol01 lessontime1')]]));
+    stop = watchLessonTimes(doc.body);
+    await settle();
+    doc.querySelector('td.time')!.firstChild!.nodeValue = '3';
+    await settle();
+    expect(ranges()).toEqual(['12:00 ~ 13:15']);
+  });
+
+  it('교시 수 class가 사라지면 이전 표시를 지운다', async () => {
+    load(table([['1', lesson('namecol01 lessontime1')]]));
+    stop = watchLessonTimes(doc.body);
+    await settle();
+    expect(ranges()).toHaveLength(1);
+    doc.querySelector('.namecol01')!.className = 'namecol01';
+    await settle();
+    expect(ranges()).toHaveLength(0);
+  });
+
+  it('확장 표시 때문에 중복이나 반복 갱신이 생기지 않는다', async () => {
+    load(table([['1', lesson('namecol01 lessontime1')]]));
+    stop = watchLessonTimes(doc.body);
+    await settle();
+    await settle();
+    expect(doc.querySelectorAll('[data-khp-lesson-time]')).toHaveLength(1);
+    expect(doc.querySelector('.namecol01')!.children).toHaveLength(2);
   });
 });
