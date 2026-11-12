@@ -7,8 +7,10 @@ import { readBackgroundReply, withReceiverRetry } from '@/utils/send-message';
 import { mountDeadlineDrawer } from '@/utils/ui/deadline-drawer';
 import { watchLessonTimes } from '@/utils/ui/lesson-time';
 import { mountSessionIndicator } from '@/utils/ui/session-indicator';
+import { watchSyllabusLink } from '@/utils/ui/syllabus-link';
 import '@/utils/ui/lesson-time.css';
 import '@/utils/ui/session-indicator.css';
+import '@/utils/ui/syllabus-link.css';
 
 const send = async (message: ExtensionMessage) =>
   readBackgroundReply(await withReceiverRetry(() => browser.runtime.sendMessage(message)));
@@ -32,6 +34,12 @@ export default defineContentScript({
       ctx.onInvalidated(watchLessonTimes(document.body));
     } catch (error) {
       console.warn('[KLAS Helper Plus] 수업 시간을 표시하지 못했습니다.', error);
+    }
+
+    try {
+      ctx.onInvalidated(watchSyllabusLink(document.body));
+    } catch (error) {
+      console.warn('[KLAS Helper Plus] 강의계획서 링크를 표시하지 못했습니다.', error);
     }
 
     // background가 10분마다 맡기는 세션 연장. KLAS와 같은 출처로 보내야 로그인 쿠키가 실린다.
