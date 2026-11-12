@@ -76,10 +76,11 @@ export function decideReview(input) {
     const back = labels.includes('ai:ready');
     const round = labels.filter((l) => /^ai:round-\d+$/.test(l)).length + 1;
     if (round > MAX_ROUNDS) {
+      // ai:ready에서 멈출 때도 ai:in-progress로 되돌린다. 사용자가 ai:needs-human을 지우면 이 라벨로 다시 판단한다.
       return {
         action: 'stop',
         reason: `round limit (${task.reason})`,
-        addLabels: ['ai:needs-human'],
+        addLabels: ['ai:needs-human', ...(back ? ['ai:in-progress'] : [])],
         removeLabels: back ? ['ai:ready'] : [],
       };
     }
