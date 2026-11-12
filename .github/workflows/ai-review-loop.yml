@@ -121,8 +121,8 @@ jobs:
             let finding = null;
             for (const r of reviews) {
               const inline = await github.paginate(github.rest.pulls.listCommentsForReview, { ...context.repo, pull_number: pr.number, review_id: r.id });
-              const clean = /didn'?t find any major issues/i.test(r.body ?? '');
-              if (inline.length > 0 || (!clean && (r.body ?? '').trim())) finding = r;
+              // 지적은 줄 단위 댓글로 판단한다. 리뷰 본문은 언어와 문구가 바뀔 수 있어 보지 않는다.
+              if (inline.length > 0) finding = r;
             }
             // 2. Codex 요약 댓글의 상태 표시가 현재 head의 검토 완료를 가리키는지
             let state = null;
@@ -130,7 +130,8 @@ jobs:
               const m = c.body?.match(/<!-- codex-review-state:v1 (\{.*?\}) -->/);
               if (m) { try { state = JSON.parse(m[1]).code_review; } catch { /* 형식이 바뀌면 통과로 보지 않는다 */ } }
             }
-            const passed = state?.commit_sha === head && state?.status === 'completed' && !finding;
+            const passed = state?.commit_sha === head && state?.status === 'completed'
+              && state?.has_any_findings === false && !finding;
             // 3. 현재 head의 CI(check) 결과
             const runs = (await github.rest.checks.listForRef({ ...context.repo, ref: head, check_name: 'check' })).data.check_runs;
             const ci = runs.length === 0 ? 'missing' : runs.some((r) => r.status !== 'completed') ? 'pending'
