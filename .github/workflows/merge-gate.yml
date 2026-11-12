@@ -1,0 +1,65 @@
+# PR head 커밋에 머지 게이트 상태(commit status `ai-gate`)를 남긴다. develop ruleset이 이 상태를 필수 검사로 요구한다.
+# 판단 기준은 scripts/ai/merge-gate.js: 현재 커밋의 Codex 리뷰 완료, 현재 커밋에서 단 P0/P1 지적 없음,
+# CI check 통과, 자동 흐름이 진행 중이거나 멈추지 않음. 흐름 전체는 docs/AI-COLLABORATION.md "머지 게이트"를 따른다.
+# 새 커밋에는 상태가 없으므로, 이 워크플로가 돌기 전까지도 머지는 막힌다.
+name: Merge gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+  issue_comment:
+    types: [created, edited]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  statuses: write
+  pull-requests: read
+  issues: read
+  checks: read
+
+env:
+  CODEX_BOT: chatgpt-codex-connector[bot]
+
+# 같은 PR의 이전 판단은 최신 판단이 대신하므로 취소한다.
+concurrency:
+  group: >-
+    merge-gate-${{ github.event.pull_request.number || github.event.issue.number ||
+    github.event.workflow_run.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # 댓글과 리뷰는 Codex가 남긴 것만 본다. 다른 댓글로는 상태가 바뀌지 않는다.
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request_review' && github.event.review.user.login == 'chatgpt-codex-connector[bot]') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request != null && github.event.comment.user.login == 'chatgpt-codex-connector[bot]') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.pull_requests[0] != null)
+    runs-on: ubuntu-latest
+    steps:
+      # 판단 코드는 항상 기본 브랜치에서 읽는다. PR 브랜치의 코드가 게이트 판단을 바꾸지 못하게 한다.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: scripts/ai
+          persist-credentials: false
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const script = `${process.env.GITHUB_WORKSPACE}/scripts/ai/merge-gate.js`;
+            // 이 워크플로를 추가하는 PR에서는 기본 브랜치에 판단 코드가 아직 없다.
+            if (!require('fs').existsSync(script)) return core.notice('기본 브랜치에 merge-gate.js가 없어 건너뜁니다.');
+            const { updateGate } = await import(script);
+            const p = context.payload;
+            await updateGate({
+              github, context, core,
+              number: p.pull_request?.number ?? p.issue?.number ?? p.workflow_run?.pull_requests?.[0]?.number,
+              codexBot: process.env.CODEX_BOT,
+              runUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });

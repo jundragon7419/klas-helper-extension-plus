@@ -14,9 +14,15 @@ export function parseCodexState(body) {
   }
 }
 
-/** check run 목록을 하나의 상태로 줄인다. */
+/**
+ * check run 목록을 하나의 상태로 줄인다.
+ * 같은 커밋에서 CI가 다시 돌면(PR 본문 수정, 재실행) 취소된 이전 run이 남으므로, id가 있으면 가장 최근 run만 본다.
+ */
 export function summarizeChecks(runs) {
   if (runs.length === 0) return 'missing';
+  if (runs.every((r) => typeof r.id === 'number')) {
+    runs = [runs.reduce((a, b) => (b.id > a.id ? b : a))];
+  }
   if (runs.some((r) => r.status !== 'completed')) return 'pending';
   return runs.every((r) => r.conclusion === 'success') ? 'success' : 'failure';
 }
