@@ -5,7 +5,7 @@
 ## 프로젝트
 
 - 광운대 KLAS를 보조하는 브라우저 확장. WXT(MV3), TypeScript, Vitest를 쓴다.
-- 기능 브랜치는 `develop`에서 만들고 PR도 `develop`으로 연다. 이름은 `<종류>/<이슈 번호>-<짧은 설명>` (예: `fix/73-keep-deadlines-in-page`).
+- 기능 브랜치는 `develop`에서 만들고 PR도 `develop`으로 연다. 이름과 종류는 [기여 안내의 브랜치 절](CONTRIBUTING.md#브랜치)을 따른다. CI가 브랜치 이름과 PR 본문의 `Closes #이슈 번호`를 검사한다.
 - PR을 열기 전에 아래 검사를 모두 통과시킨다. CI의 `check` 작업도 같은 검사를 한다.
 
 ```shell

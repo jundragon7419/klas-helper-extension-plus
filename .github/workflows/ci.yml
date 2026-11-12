@@ -5,9 +5,16 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+    # edited: PR 본문의 "Closes #N"을 고친 뒤에도 브랜치 검사를 다시 한다.
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
+
+# 같은 PR에서 새 실행이 시작되면 이전 실행을 멈춘다. develop, main push는 멈추지 않는다.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -19,6 +26,15 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+
+      # 규칙은 CONTRIBUTING.md "브랜치" 절. 브랜치 이름과 본문은 env로 넘겨 셸에 직접 넣지 않는다.
+      - name: 브랜치 이름 검사
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/ci/check-branch.js
 
       - name: 의존성 설치
         run: npm ci

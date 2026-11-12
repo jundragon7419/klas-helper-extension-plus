@@ -10,7 +10,7 @@ set -euo pipefail
 
 if [ -z "${GH_TOKEN:-}" ]; then echo "::error::MAINTAINER_PR_TOKEN secret이 없습니다."; exit 1; fi
 branch=$BRANCH
-if ! [[ "$branch" =~ ^(feat|fix|refactor|docs|chore)/${ISSUE}- ]]; then
+if ! [[ "$branch" =~ ^(feat|fix|refactor|test|docs|chore)/${ISSUE}-[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
   echo "::error::브랜치 이름이 규칙과 다릅니다: $branch"; exit 1
 fi
 if [ "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" != "$HEAD_SHA" ]; then
