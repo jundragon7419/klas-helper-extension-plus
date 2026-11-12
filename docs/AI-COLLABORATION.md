@@ -28,28 +28,33 @@
 - 수정 3회 뒤에도 지적이 남음
 - Claude가 지적에 동의하지 않아 코드를 바꾸지 않음
 - 마지막 커밋 뒤 3시간 동안 Codex 리뷰가 없음
+- PR 브랜치에 Codex가 커밋을 올림(Codex는 코드를 바꾸지 않는 역할)
 
-멈추면 사용자에게 말하는 쪽은 Codex 하나다.
+멈추면 Codex가 먼저 답하고, Codex가 답할 수 없을 때만 사용자에게 넘어간다.
 
-1. Claude는 멈춘 원인과 근거를 "멈춤 보고"로 남긴다(`AGENTS.md` 형식). 사용자에게 직접 요청하지 않는다.
-2. 워크플로가 사용자 계정(`MAINTAINER_PR_TOKEN`)으로 `@codex` 정리 요청을 단다. 표시는 `<!-- ai-relay:... -->`다.
-3. Codex가 멈춤 보고를 읽고 저장소로 답할 수 있으면 답하고, 아니면 사용자가 할 일을 정리한다(`AGENTS.md` "멈춤 정리").
-4. `AI relay` 워크플로가 Codex 정리 댓글을 보면 사용자를 멘션해 알린다. 30분 안에 정리가 없으면 그대로 알린다.
-5. 사용자가 필요한 정보를 주면 Codex가 이슈에 정리해 올린다. 이슈는 `@claude` 댓글로 다시 시작하고(라벨은 자동으로 지워진다), PR은 사용자가 `ai:needs-human` 라벨을 지우면 다음 Codex 리뷰나 CI 결과부터 다시 판단한다.
+1. Claude가 `ask`(질문) 또는 `objection`(이견)을 남긴다(`AGENTS.md` "막혔을 때 (Claude)").
+2. 워크플로가 사용자 계정(`MAINTAINER_PR_TOKEN`)으로 `@codex` 요청을 달아 그 메시지를 넘긴다. 표시는 `<!-- ai-relay:... -->`이고 Claude 메시지의 댓글 ID를 적는다(`scripts/ai/request-codex.sh`).
+   - 다음 경우에는 Codex에게 넘기지 않고 사용자에게 바로 알린다: Claude의 최신 ai-msg 메시지가 없거나 형식이 틀림(오류 목록을 함께 남긴다), 최신 메시지가 `ask`나 `objection`이 아님, 최신 메시지에 Codex가 이미 답함(Claude가 새 메시지 없이 다시 멈춤), 이슈 하나에서 `ask`가 2회를 넘음, 같은 질문이 반복됨. 질문 횟수와 반복은 PR 스레드와 PR이 닫는 이슈의 질문을 합쳐 센다. Codex 답은 Claude 메시지를 `reply-to`로 가리켜야 하므로, 넘길 메시지가 없으면 Codex가 답할 수 없다.
+3. Codex가 `answer` 또는 `need-user`로 답한다(`AGENTS.md` "질문 답변 (Codex)").
+4. `AI relay` 워크플로가 Codex 답을 분류한다(`scripts/ai/relay.js`).
+   - `answer`이고 `재시작: 예`이며 Claude 메시지와 답의 `issue` 값이 이 스레드의 이슈(PR은 PR이 닫는 이슈)와 같음: Claude를 다시 부른다. 이슈는 `AI implement`, PR은 `AI review loop`를 `workflow_dispatch`로 실행하고, 두 워크플로가 근거(이 스레드의 Claude 메시지에 대한 Codex 답, 이슈는 이전 메인테이너 `@claude` 승인)를 다시 확인한다. 사용자는 부르지 않는다. 다시 부른 워크플로가 근거 확인이나 회차 제한으로 시작하지 못하면 그 이유와 함께 사용자를 부른다.
+   - `need-user`, `재시작: 아니오`, 형식 오류: 사용자를 멘션해 알린다. 형식 오류면 오류 목록도 남긴다.
+   - 30분 안에 Codex 답이 없으면 그대로 알린다.
+5. 사용자는 필요한 정보를 `@codex`로 시작하는 댓글로 준다. Codex가 그 정보로 처음 질문에 `answer`를 다시 달면 4번으로 이어진다. 사용자가 직접 다시 시작하려면 이슈는 `@claude` 댓글, PR은 `ai:needs-human` 라벨 제거로 할 수 있다.
 
 Codex 리뷰가 오지 않는 경우(3시간 무응답)는 Codex에게 요청하지 않고 바로 사용자에게 알린다.
 
 ### 메시지 형식으로 옮기는 중
 
-AI 간 메시지는 `AGENTS.md` "AI 메시지 형식"(ai-msg v1)으로 옮긴다. 형식과 검사(`scripts/ai/ai-msg.js`)는 정해졌고, 워크플로는 아직 아래 왼쪽의 표시를 쓴다. 실제 교체는 #117(질문 흐름), #118(PR 수정 요청)에서 한다.
+AI 간 메시지는 `AGENTS.md` "AI 메시지 형식"(ai-msg v1)으로 옮긴다. 질문 흐름(`ask`, `objection`, `answer`, `need-user`)은 옮겼고, 남은 것은 #118(PR 수정 요청)에서 옮긴다.
 
-| 지금 쓰는 것 | 옮길 종류 | 바뀌는 점 |
+| 지금 쓰는 것 | 옮길 종류 | 상태 |
 |---|---|---|
-| `@claude` 시작 댓글 | `start` | 승인한 사용자 댓글 ID(`reply-to`)와 계획 개정 번호를 함께 적는다 |
-| 멈춤 보고(Claude) | `ask` 또는 `objection` | 질문마다 답에 따라 달라지는 구현을 적는다. 계획에 동의하지 않으면 `objection` |
-| 멈춤 정리(Codex) | `answer` 또는 `need-user` | 답할 수 있으면 `answer`로 Claude를 다시 진행시키고, 없을 때만 `need-user` |
-| `<!-- ai-handled:... -->` 처리 댓글 | `report` | 지적별 `고침:`/`이견:`에 새 head와 실행한 검사를 더한다. 처리한 지적 ID는 `reply-to`로 남긴다 |
-| `<!-- ai-relay:... -->` 정리 요청 | 워크플로가 `ask`를 Codex에게 전달하는 댓글 | 메시지가 아니라 호출이다. 전달할 `ask`의 댓글 ID를 적는다 |
+| 멈춤 보고(Claude) | `ask` 또는 `objection` | 옮김 |
+| 멈춤 정리(Codex) | `answer` 또는 `need-user` | 옮김 |
+| `@claude` 시작 댓글 | `start` | #118 |
+| `<!-- ai-handled:... -->` 처리 댓글 | `report` | #118 |
+| `<!-- ai-relay:... -->` 요청 | 그대로 둔다 | 메시지가 아니라 Codex 호출이다. 넘길 Claude 메시지의 댓글 ID를 적는다 |
 | `<!-- ai-pinged:... -->` 알림 | 그대로 둔다 | 사용자 알림이라 AI 메시지가 아니다 |
 
 | 라벨 | 뜻 |
@@ -83,7 +88,7 @@ AI 간 메시지는 `AGENTS.md` "AI 메시지 형식"(ai-msg v1)으로 옮긴다
 | 실패 | CI 실패, 현재 커밋에 P0/P1 지적이 있음, 자동 흐름이 멈춤(`ai:needs-human`) |
 
 - 새 커밋에는 상태가 없으므로 게이트가 다시 판단하기 전까지 머지가 막힌다. 이전 커밋의 성공은 새 커밋에 이어지지 않는다.
-- Codex 리뷰 완료는 요약 댓글의 상태 표시(`codex-review-state`), 현재 커밋에 대한 리뷰, `@codex review` 응답 중 하나로 인정한다. 사람이 연 PR에 새 커밋을 올렸다면 `@codex review`를 달아야 게이트가 열린다.
+- Codex 리뷰 완료는 요약 댓글의 상태 표시(`codex-review-state`), 현재 커밋에 대한 리뷰, `@codex review` 응답, 현재 커밋의 파일을 가리키는 작업 결과 댓글(`View task` 링크가 있는 일반 댓글) 중 하나로 인정한다. 작업 결과 댓글은 본문의 `[P0]`, `[P1]` 표시를 지적으로 센다. 사람이 연 PR에 새 커밋을 올렸다면 `@codex review`를 달아야 게이트가 열린다.
 - P2 이하 지적은 머지를 막지 않는다. 고칠지는 PR 작성자가 판단한다. 자동 흐름은 P2도 고친 뒤 `ai:ready`가 된다.
 - 이전 커밋에서 단 지적은 GitHub가 새 커밋 위치로 옮겨 보여 줘도 세지 않는다. 새 커밋을 다시 검토한 결과만 본다.
 - 같은 커밋에서 CI가 다시 돌면(PR 본문 수정, 재실행) 가장 최근 실행만 본다.

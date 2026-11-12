@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  decideAnswerRestart,
   decideReview,
   parseCodexState,
   summarizeChecks,
@@ -213,5 +214,37 @@ describe('decideReview', () => {
         'not an active AI PR',
       );
     }
+  });
+});
+
+describe('decideAnswerRestart', () => {
+  const base = { open: true, sameRepo: true, answerId: 55 };
+
+  it('멈춘 AI PR을 Codex 답으로 다시 고치게 하고 멈춤 라벨을 지운다', () => {
+    expect(
+      decideAnswerRestart({ ...base, labels: ['ai:in-progress', 'ai:needs-human', 'ai:round-1'] }),
+    ).toEqual({
+      action: 'fix',
+      reason: 'codex answer 55; task=answer-55; round=2',
+      task: 'answer-55',
+      round: 2,
+      addLabels: ['ai:round-2'],
+      removeLabels: ['ai:needs-human'],
+    });
+  });
+
+  it('회차를 넘으면 다시 시작하지 않는다', () => {
+    const labels = ['ai:in-progress', 'ai:needs-human', 'ai:round-1', 'ai:round-2', 'ai:round-3'];
+    expect(decideAnswerRestart({ ...base, labels }).action).toBe('none');
+  });
+
+  it('자동 흐름이 아닌 PR, 닫힌 PR, 다른 저장소 PR은 다시 시작하지 않는다', () => {
+    expect(decideAnswerRestart({ ...base, labels: ['task'] }).action).toBe('none');
+    expect(decideAnswerRestart({ ...base, open: false, labels: ['ai:in-progress'] }).action).toBe(
+      'none',
+    );
+    expect(
+      decideAnswerRestart({ ...base, sameRepo: false, labels: ['ai:in-progress'] }).action,
+    ).toBe('none');
   });
 });

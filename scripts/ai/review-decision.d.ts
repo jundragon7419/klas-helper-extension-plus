@@ -39,3 +39,10 @@ export interface ReviewDecision {
 }
 
 export function decideReview(input: ReviewInput): ReviewDecision;
+
+export function decideAnswerRestart(input: {
+  labels: string[];
+  open: boolean;
+  sameRepo: boolean;
+  answerId: number;
+}): ReviewDecision;

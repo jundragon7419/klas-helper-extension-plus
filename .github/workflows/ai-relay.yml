@@ -1,5 +1,7 @@
-# 자동 흐름이 멈춰 Codex에게 정리를 맡긴 이슈나 PR(라벨 ai:needs-human)에서,
-# Codex 정리 댓글이 오면 메인테이너에게 알린다. 30분 안에 오지 않으면 그대로 알린다.
+# 자동 흐름이 멈춰 Claude의 ask나 objection을 Codex에게 넘긴 이슈나 PR(라벨 ai:needs-human)에서:
+# - Codex가 answer(재시작: 예)로 답하면 Claude를 다시 부른다(이슈는 AI implement, PR은 AI review loop).
+# - Codex가 need-user, 재시작하지 않는 answer, 형식이 틀린 답을 남기면 메인테이너에게 알린다.
+# - 30분 안에 Codex 답이 없으면 그대로 알린다.
 # 흐름 전체는 docs/AI-COLLABORATION.md "멈췄을 때"를 따른다.
 name: AI relay
 
@@ -13,6 +15,8 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
+  # Claude를 다시 부르는 workflow_dispatch
+  actions: write
 
 env:
   CODEX_BOT: chatgpt-codex-connector[bot]
@@ -24,6 +28,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Codex 답이 재시작이면 Claude를 다시 부르고, 형식이 틀렸으면 오류를 알린다.
+  dispatch:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.comment.user.login == 'chatgpt-codex-connector[bot]' &&
+      contains(github.event.issue.labels.*.name, 'ai:needs-human')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: scripts/ai
+          persist-credentials: false
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { classifyCodexReply, resolveExpectedIssue, rolesOf } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/relay.js`);
+            const { formatErrorBody } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/ai-msg.js`);
+            const repo = context.repo;
+            const item = context.payload.issue;
+            const comment = context.payload.comment;
+            const comments = (await github.paginate(github.rest.issues.listComments, { ...repo, issue_number: item.number }))
+              .map((c) => ({ id: c.id, login: c.user?.login ?? '', body: c.body ?? '' }));
+            const roles = rolesOf({ codexBot: process.env.CODEX_BOT, maintainer: process.env.MAINTAINER });
+            const expectedIssue = await resolveExpectedIssue({ github, repo, number: item.number });
+            const reply = classifyCodexReply({
+              comment: { id: comment.id, login: comment.user.login, body: comment.body ?? '' }, comments, roles, expectedIssue,
+            });
+            core.info(`#${item.number} codex ${comment.id}: ${reply.kind}`);
+
+            if (reply.kind === 'invalid') {
+              await github.rest.issues.createComment({ ...repo, issue_number: item.number,
+                body: formatErrorBody({ login: comment.user.login, url: comment.html_url, errors: reply.errors }) });
+              return;
+            }
+            if (reply.kind !== 'restart') return;
+
+            // 이슈는 AI implement, PR은 AI review loop로 다시 부른다. 두 워크플로가 근거를 다시 확인한다.
+            const ref = context.payload.repository.default_branch;
+            if (item.pull_request) {
+              await github.rest.actions.createWorkflowDispatch({ ...repo, workflow_id: 'ai-review-loop.yml', ref,
+                inputs: { pr: String(item.number), answer: String(comment.id) } });
+            } else {
+              await github.rest.actions.createWorkflowDispatch({ ...repo, workflow_id: 'ai-implement.yml', ref,
+                inputs: { issue: String(item.number), answer: String(comment.id) } });
+            }
+
   ping:
     if: >-
       github.event_name == 'schedule' ||
@@ -40,7 +92,7 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            const { decidePing, pingBody } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/relay.js`);
+            const { decidePing, pingBody, resolveExpectedIssue, rolesOf } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/relay.js`);
             const repo = context.repo;
             const numbers = context.eventName === 'schedule'
               ? (await github.paginate(github.rest.issues.listForRepo, { ...repo, state: 'open', labels: 'ai:needs-human', per_page: 100 }))
@@ -49,8 +101,10 @@ jobs:
 
             for (const number of numbers) {
               const comments = (await github.paginate(github.rest.issues.listComments, { ...repo, issue_number: number, per_page: 100 }))
-                .map((c) => ({ login: c.user?.login ?? '', body: c.body ?? '', createdAt: c.created_at }));
+                .map((c) => ({ id: c.id, login: c.user?.login ?? '', body: c.body ?? '', createdAt: c.created_at }));
               const d = decidePing({
+                roles: rolesOf({ codexBot: process.env.CODEX_BOT, maintainer: process.env.MAINTAINER }),
+                expectedIssue: await resolveExpectedIssue({ github, repo, number }),
                 comments,
                 now: Date.now(),
                 codexBot: process.env.CODEX_BOT,

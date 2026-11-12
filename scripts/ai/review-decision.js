@@ -112,3 +112,25 @@ export function decideReview(input) {
   const codex = state ? `${String(state.commit_sha).slice(0, 7)}/${state.status}` : 'none';
   return none(`waiting (codex=${codex}, finding=${Boolean(finding)}, ci=${ci})`);
 }
+
+/**
+ * Codex가 Claude의 ask나 objection에 답하고 재시작을 요청했을 때 PR에서 검토 반영을 다시 시작할지 정한다.
+ * 근거 확인(classifyCodexReply)은 호출하는 쪽이 먼저 한다. 회차 제한은 다른 검토 반영과 같이 센다.
+ * @param {{labels: string[], open: boolean, sameRepo: boolean, answerId: number}} input
+ */
+export function decideAnswerRestart({ labels, open, sameRepo, answerId }) {
+  const none = (reason) => ({ action: 'none', reason, addLabels: [], removeLabels: [] });
+  const active = labels.includes('ai:in-progress') || labels.includes('ai:ready');
+  if (!open || !active || !sameRepo) return none('not an active AI PR');
+  const round = labels.filter((l) => /^ai:round-\d+$/.test(l)).length + 1;
+  if (round > MAX_ROUNDS) return none(`round limit (codex answer ${answerId})`);
+  const back = labels.includes('ai:ready');
+  return {
+    action: 'fix',
+    reason: `codex answer ${answerId}; task=answer-${answerId}; round=${round}`,
+    task: `answer-${answerId}`,
+    round,
+    addLabels: [...(back ? ['ai:in-progress'] : []), `ai:round-${round}`],
+    removeLabels: ['ai:needs-human', ...(back ? ['ai:ready'] : [])],
+  };
+}
