@@ -8,7 +8,7 @@
 //                                                                  (history: PR이 닫는 이슈의 댓글)
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { validateMessage } from './ai-msg.js';
+import { parseMessage, validateMessage } from './ai-msg.js';
 
 export const PING_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -251,7 +251,9 @@ export function decidePing({ comments, now, codexBot, maintainer, pingBot, roles
       c.login === codexBot &&
       Date.parse(c.createdAt) > relay.at &&
       !c.body.includes('codex-review-state') &&
-      !c.body.includes('codex-review-receipt'),
+      !c.body.includes('codex-review-receipt') &&
+      // 사용자 수정 요청에 대한 change는 AI review loop가 처리하므로 정리 답으로 보지 않는다.
+      parseMessage(c.body)?.meta.type !== 'change',
   );
   if (answer) {
     if (

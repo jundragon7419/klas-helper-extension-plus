@@ -17,7 +17,19 @@
    - 현재 커밋에 Codex 지적이 있거나 CI가 실패하면 Claude가 고쳐서 커밋한다. Claude는 push하지 않는다. 다음 작업(`push-fix`)이 커밋을 검사하고 `MAINTAINER_PR_TOKEN`으로 같은 브랜치에 push한 뒤, Codex는 push를 스스로 다시 검토하지 않으므로 `@codex review`를 달아 재검토를 요청한다. 회차마다 `ai:round-N` 라벨이 붙는다.
    - 검토 반영을 메인테이너 토큰으로 push하는 이유: `GITHUB_TOKEN`으로 push하면 그 push로 시작되는 CI와 AI review loop가 승인 대기 상태가 되어 사용자가 직접 승인해야 한다.
    - Codex 요약 댓글의 상태 표시(`codex-review-state`)가 현재 커밋의 검토 완료를 가리키고, 그 커밋에 Codex 지적이 없고, CI `check`가 성공하면 `ai:ready`로 바꾸고 사용자를 호출한다. 그 뒤에 지적이 도착하면 `ai:in-progress`로 되돌리고 고친다.
-6. 사용자가 PR과 "KLAS에서 직접 확인할 항목"을 확인하고 PR 본문의 Squash 커밋 메시지로 머지한다. 머지 버튼은 머지 게이트(`ai-gate`)가 성공일 때만 열린다(아래 "머지 게이트").
+6. 사용자가 PR과 "KLAS에서 직접 확인할 항목"을 확인하고 PR 본문의 Squash 커밋 메시지로 머지한다. 머지 버튼은 머지 게이트(`ai-gate`)가 성공일 때만 열린다(아래 "머지 게이트"). 결과를 바꾸고 싶으면 머지하지 않고 아래 "PR 수정 요청"으로 요청한다.
+
+### PR 수정 요청
+
+결과가 마음에 들지 않으면 사용자가 PR에 `@codex`로 바꿀 점을 적는다. 이후는 사용자 중계 없이 이어진다.
+
+1. Codex가 그 PR에 `change`를 단다(`AGENTS.md` "PR 수정 요청 (Codex)"). `change`는 바뀐 완료 조건(전후), 이유, 바꿀 항목을 담은 계획 개정이고 `reply-to`는 사용자 요청 댓글이다. Codex는 요청받은 PR 스레드에만 댓글을 달 수 있어 `plan-rev`를 따로 남기지 않는다.
+2. `AI review loop`가 `change`를 확인한다(`scripts/ai/change.js`). 다음이면 실행하지 않는다.
+   - Codex나 메인테이너가 아닌 계정이 보냄: 무시한다.
+   - 형식 오류, `pr`이나 `issue` 값이 이 PR과 다름, `reply-to`가 이 PR에 먼저 달린 메인테이너 댓글이 아님, rev가 이전 `change`보다 크지 않거나 이슈의 `plan-rev`보다 작음: 오류 목록과 함께 사용자를 부른다.
+   - 이 PR에서 `change`를 이미 3회 실행함: `ai:needs-human`을 붙이고 사용자를 부른다.
+3. 실행하면 `ai:ready`, `ai:needs-human`, `ai:round-N`을 지우고 `ai:in-progress`를 붙인다. 머지 게이트가 대기로 돌아가 수정 중에는 머지할 수 없다. 이슈에는 개정 기록 댓글(바뀐 완료 조건과 이유, `change` 링크)을 남긴다.
+4. Claude가 같은 PR 브랜치에서 최신 rev 계획(이슈 본문과 모든 개정)에 맞춰 고치고 커밋한 뒤 `report`를 남긴다. `push-fix`가 push하고 Codex 재검토를 요청한다. 이후는 5번 검토 반영과 같고, 회차는 처음부터 센다.
 
 ### 멈췄을 때
 
@@ -46,21 +58,22 @@ Codex 리뷰가 오지 않는 경우(3시간 무응답)는 Codex에게 요청하
 
 ### 메시지 형식으로 옮기는 중
 
-AI 간 메시지는 `AGENTS.md` "AI 메시지 형식"(ai-msg v1)으로 옮긴다. 질문 흐름(`ask`, `objection`, `answer`, `need-user`)은 옮겼고, 남은 것은 #118(PR 수정 요청)에서 옮긴다.
+AI 간 메시지는 `AGENTS.md` "AI 메시지 형식"(ai-msg v1)으로 옮긴다. 질문 흐름(`ask`, `objection`, `answer`, `need-user`)과 PR 수정 요청(`change`, `report`)은 옮겼다.
 
 | 지금 쓰는 것 | 옮길 종류 | 상태 |
 |---|---|---|
 | 멈춤 보고(Claude) | `ask` 또는 `objection` | 옮김 |
 | 멈춤 정리(Codex) | `answer` 또는 `need-user` | 옮김 |
-| `@claude` 시작 댓글 | `start` | #118 |
-| `<!-- ai-handled:... -->` 처리 댓글 | `report` | #118 |
+| `@claude` 시작 댓글 | `start` | #123에서 정리 |
+| `<!-- ai-handled:... -->` 처리 댓글 | `report` | 옮김. 커밋한 경우 `report`로 쓰고 마지막 줄에 처리 표시를 남긴다. 커밋하지 않은 경우는 처리 표시만 있는 일반 댓글 |
+| 사용자 수정 요청 | `change` | 옮김 |
 | `<!-- ai-relay:... -->` 요청 | 그대로 둔다 | 메시지가 아니라 Codex 호출이다. 넘길 Claude 메시지의 댓글 ID를 적는다 |
 | `<!-- ai-pinged:... -->` 알림 | 그대로 둔다 | 사용자 알림이라 AI 메시지가 아니다 |
 
 | 라벨 | 뜻 |
 |---|---|
 | `ai:in-progress` | 자동 흐름 진행 중 |
-| `ai:round-1` ~ `ai:round-3` | 검토 반영 회차 |
+| `ai:round-1` ~ `ai:round-3` | 검토 반영 회차. `change`를 실행하면 처음부터 센다 |
 | `ai:ready` | 현재 커밋이 Codex 리뷰와 CI를 통과함. 사용자 확인 대기 |
 | `ai:needs-human` | 자동 흐름이 멈춤. 사용자 판단 필요 |
 
@@ -69,6 +82,7 @@ AI 간 메시지는 `AGENTS.md` "AI 메시지 형식"(ai-msg v1)으로 옮긴다
 - 구현은 `jundragon7419`의 `@claude` 댓글로만 시작한다. 검토 반영은 같은 저장소 브랜치의 `ai:in-progress` PR에서만 한다.
 - 통과 판정은 현재 head 커밋 SHA에 묶인 Codex 결과와 CI 결과만 쓴다. 새 커밋이 올라오면 `ai:ready`는 지워진다.
 - 지적 처리 표시(`ai-handled`)는 `claude[bot]`이 남긴 댓글만 인정한다.
+- `change`는 Codex나 메인테이너가 보낸 것만, PR당 3회까지 실행한다.
 - 같은 이슈에 열린 PR이 있으면 새 구현을 시작하지 않는다.
 - 머지는 사용자만 한다.
 - 자동 흐름의 Claude는 `.github/workflows/` 파일을 push할 수 없다(GitHub App에 workflows 권한을 주지 않는다). 검토 반영 단계의 Claude는 아예 push하지 않고, `push-fix`가 다음을 확인한 커밋만 push한다: 작업 브랜치 이름 규칙에 맞음, Claude 작업 중 원격 브랜치가 바뀌지 않음, 작업 전 커밋에서 fast-forward로 이어짐, `.github/workflows/` 변경 없음(`scripts/ai/push-fix.sh`). 워크플로 변경은 수동 방식으로 한다.

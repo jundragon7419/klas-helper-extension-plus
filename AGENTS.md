@@ -60,6 +60,15 @@ Claude와 Codex가 이슈와 PR 댓글로 서로에게 전하는 내용은 이 �
 @claude
 <!-- ai-msg:v1 type=change issue=104 pr=111 head=- rev=2 reply-to=3512345678 -->
 
+### 바뀐 완료 조건
+
+- 전: 강의계획서 링크가 파란색으로 보인다
+- 후: 강의계획서 링크가 기존 헤더 글자색으로 보인다
+
+### 이유
+
+사용자가 링크 색이 헤더와 어울리지 않는다고 요청함
+
 ### 바꿀 항목
 
 - 강의계획서 링크 글자색을 기존 헤더 글자색으로
@@ -77,10 +86,10 @@ Claude와 Codex가 이슈와 PR 댓글로 서로에게 전하는 내용은 이 �
 | `ask` | Claude → Codex | issue | 단계, 질문, 확인한 것 | 구현이나 검토 반영 중 막혔을 때. 질문마다 답에 따라 달라지는 구현을 적는다 |
 | `answer` | Codex → Claude | issue, reply-to | 답, 근거, 재시작 | `ask`에 답할 때. 질문별 답과 근거(파일 위치나 URL), 재시작은 `예` 또는 `아니오` |
 | `need-user` | Codex → 사용자 | issue, reply-to | 확인할 것, 확인 방법, 붙일 것 | 저장소와 공개 자료로 답할 수 없을 때 |
-| `plan-rev` | Codex → Claude | issue, rev, reply-to | 바뀐 완료 조건, 이유 | 사용자 요청으로 계획을 고칠 때. 완료 조건은 바뀌기 전과 후를 함께 적는다 |
-| `change` | Codex → Claude | issue, pr, rev, reply-to | 바꿀 항목 | 열린 PR을 개정된 계획에 맞춰 고치게 할 때 |
+| `plan-rev` | Codex → Claude | issue, rev, reply-to | 바뀐 완료 조건, 이유 | PR이 열리기 전에 사용자 요청으로 이슈 계획을 고칠 때. 완료 조건은 바뀌기 전과 후를 함께 적는다 |
+| `change` | Codex → Claude | issue, pr, rev, reply-to | 바뀐 완료 조건, 이유, 바꿀 항목 | 열린 PR에 대한 사용자 수정 요청을 계획 개정과 함께 Claude에게 넘길 때. reply-to는 요청한 사용자 댓글 |
 | `objection` | Claude → Codex | issue | 문제 항목, 근거, 제안 | 계획이나 지적이 틀렸다고 판단할 때 |
-| `report` | Claude → Codex | issue, pr, head | 결과, 실행한 검사 | 구현이나 수정을 push한 뒤. 결과는 항목별 `고침:` 또는 `이견:` |
+| `report` | Claude → Codex | issue, pr, head | 결과, 실행한 검사 | 검토 반영이나 change 수정을 커밋한 뒤. 결과는 항목별 `고침:` 또는 `이견:`. change를 처리했으면 reply-to에 change 댓글 ID |
 
 Codex는 사용자 대화에서 사용자 계정으로 댓글을 달기도 하므로, Codex가 보내는 종류(`plan`, `start`, `plan-rev`, `change`)는 사용자 계정이 보낸 것도 인정한다.
 
@@ -113,6 +122,25 @@ Codex는 사용자 대화에서 사용자 계정으로 댓글을 달기도 하�
 - `objection`에 답할 때는 Claude의 이견과 원래 지적 중 어느 쪽이 맞는지 판단을 `### 답`에 적는다. Claude가 다시 고쳐야 하면 `재시작: 예`, 사용자 판단이 필요하면 `need-user`.
 - 사용자가 `need-user`에 대한 정보를 `@codex` 댓글로 주면, 그 정보를 근거로 처음 `ask`(reply-to는 그 `ask`)에 `answer`를 다시 단다.
 - 답은 "AI 메시지 형식"을 따르고, 요청에 적힌 댓글 ID를 표시 줄의 `reply-to`에 적는다. 형식이 틀리거나 reply-to가 이 스레드의 Claude 메시지가 아니면 Claude를 다시 부르지 않고 사용자에게 알린다.
+
+## PR 수정 요청 (Codex)
+
+메인테이너가 자동 흐름 PR(`ai:` 라벨이 붙은 PR)에 `@codex`로 결과를 바꿔 달라고 요청하면 계획을 고치고 Claude에게 넘긴다. `@codex review`와 `<!-- ai-relay:... -->` 요청은 여기에 해당하지 않는다.
+
+- 코드를 바꾸지 않고, 브랜치, 커밋, PR을 만들지 않는다. 그 PR에 `change` 메시지 하나만 댓글로 단다. 댓글에는 메시지 외의 내용을 쓰지 않는다.
+- 표시 줄: `issue`는 PR이 닫는 이슈, `pr`은 이 PR, `reply-to`는 요청한 사용자 댓글 ID, `rev`는 이슈와 PR의 `plan-rev`, `change` 중 가장 큰 rev에 1을 더한 값(개정이 없으면 1)이다.
+- `### 바뀐 완료 조건`은 바뀌기 전과 후를 적고, `### 이유`는 사용자 요청의 요지를, `### 바꿀 항목`은 Claude가 고칠 것을 파일이나 화면 단위 목록으로 적는다.
+- 요청이 이슈 범위를 벗어나 새 이슈가 맞거나 요청이 모호하면 `change`를 달지 않고, 사용자에게 일반 댓글로 새 이슈나 확인할 것을 제안한다.
+- `change`는 PR당 3회까지 실행된다. 넘으면 자동 흐름이 멈추고 사용자에게 넘어간다.
+
+## 수정을 마쳤을 때 (Claude)
+
+검토 반영이나 `change` 수정을 커밋했으면 PR에 `report`를 남긴다. push와 Codex 재검토 요청은 워크플로가 한다.
+
+- 표시 줄: `issue`는 PR이 닫는 이슈, `pr`은 이 PR, `head`는 커밋 뒤 `git rev-parse HEAD`, `change`를 처리했으면 `reply-to`에 그 댓글 ID.
+- `### 결과`: 지적이나 바꿀 항목마다 `- 고침: 무엇을` 또는 `- 이견: 근거`
+- `### 실행한 검사`: 실행한 검사와 결과
+- 계획은 이슈 본문(rev 0)과 이슈, PR의 `plan-rev`, `change` 중 rev가 가장 큰 것을 기준으로 한다.
 
 ## Review guidelines
 
