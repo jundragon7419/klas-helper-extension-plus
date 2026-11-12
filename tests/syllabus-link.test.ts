@@ -94,26 +94,29 @@ describe('watchSyllabusLink', () => {
     expect(hrefs()).toEqual([`${BASE}B202`]);
   });
 
-  it('속성 변경 없이 value만 바뀌어도 누르는 순간 새 과목으로 이동한다', () => {
-    load(page('A101'));
-    stop = watchSyllabusLink(doc.body);
-    doc.querySelector('input')!.value = 'B202';
-    const link = doc.querySelector('a[data-khp-syllabus-link]')!;
-    const event = new (doc.defaultView as unknown as { Event: typeof Event }).Event('click', {
-      bubbles: true,
-      cancelable: true,
-    });
-    link.dispatchEvent(event);
-    expect(link.getAttribute('href')).toBe(`${BASE}B202`);
-    expect(event.defaultPrevented).toBe(false);
-  });
+  it.each(['click', 'auxclick'])(
+    '속성 변경 없이 value만 바뀌어도 %s 순간 새 과목으로 이동한다',
+    (type) => {
+      load(page('A101'));
+      stop = watchSyllabusLink(doc.body);
+      doc.querySelector('input')!.value = 'B202';
+      const link = doc.querySelector('a[data-khp-syllabus-link]')!;
+      const event = new (doc.defaultView as unknown as { Event: typeof Event }).Event(type, {
+        bubbles: true,
+        cancelable: true,
+      });
+      link.dispatchEvent(event);
+      expect(link.getAttribute('href')).toBe(`${BASE}B202`);
+      expect(event.defaultPrevented).toBe(false);
+    },
+  );
 
-  it('누르는 순간 과목 코드가 없으면 이동을 막는다', () => {
+  it.each(['click', 'auxclick'])('%s 순간 과목 코드가 없으면 이동을 막는다', (type) => {
     load(page('A101'));
     stop = watchSyllabusLink(doc.body);
     doc.querySelector('input')!.value = '';
     const link = doc.querySelector('a[data-khp-syllabus-link]')!;
-    const event = new (doc.defaultView as unknown as { Event: typeof Event }).Event('click', {
+    const event = new (doc.defaultView as unknown as { Event: typeof Event }).Event(type, {
       bubbles: true,
       cancelable: true,
     });

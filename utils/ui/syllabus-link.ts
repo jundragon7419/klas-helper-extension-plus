@@ -69,9 +69,12 @@ export function watchSyllabusLink(root: HTMLElement): () => void {
   });
   root.addEventListener('change', schedule);
   root.addEventListener('click', onClick, true);
+  // 가운데 버튼은 click이 아닌 auxclick을 일으킨다.
+  root.addEventListener('auxclick', onClick, true);
   return () => {
     observer.disconnect();
     root.removeEventListener('change', schedule);
     root.removeEventListener('click', onClick, true);
+    root.removeEventListener('auxclick', onClick, true);
   };
 }
