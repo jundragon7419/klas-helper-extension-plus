@@ -166,6 +166,8 @@ describe.skipIf(!hasBash)('request-codex.sh', () => {
   });
 
   it('라벨은 Actions 토큰으로, @codex 요청은 메인테이너 토큰으로 단다', () => {
+    const a = ask();
+    threadGh([{ id: a.id, login: a.login, body: a.body }]);
     const result = run({});
 
     expect(result.status).toBe(0);
@@ -210,6 +212,22 @@ describe.skipIf(!hasBash)('request-codex.sh', () => {
     expect(readFileSync(join(root, 'codex-request.md'), 'utf8')).toContain('댓글 ID 4242');
   });
 
+  it('Claude 메시지가 없거나 형식이 틀리면 Codex에게 요청하지 않고 오류와 함께 알린다', () => {
+    const run1 = run({});
+    expect(run1.status, run1.stderr).toBe(0);
+    expect(readFileSync(calls, 'utf8')).not.toContain('[maintainer-token] api -X POST');
+    expect(readFileSync(calls, 'utf8')).toContain('Claude가 ask나 objection을 남기지 않음');
+
+    const broken = { id: 7, login: 'claude[bot]', body: '<!-- ai-msg:v1 type=ask issue=104 -->' };
+    threadGh([broken]);
+    const run2 = run({});
+    expect(run2.status, run2.stderr).toBe(0);
+    const log = readFileSync(calls, 'utf8');
+    expect(log).toContain('Claude 메시지 형식 오류');
+    expect(log).toContain('### 단계');
+    expect(log).not.toContain('[maintainer-token] api -X POST');
+  });
+
   it('ask가 너무 많으면 Codex에게 요청하지 않고 바로 알린다', () => {
     threadGh(
       Array.from({ length: MAX_ASKS + 1 }, (_, i) => {
@@ -230,9 +248,12 @@ describe.skipIf(!hasBash)('request-codex.sh', () => {
   });
 
   it('메인테이너 토큰으로 요청을 달지 못하면 Actions 토큰으로 바로 알린다', () => {
+    const a = ask();
+    const thread = join(root, 'thread-input.jsonl');
+    writeFileSync(thread, JSON.stringify({ id: a.id, login: a.login, body: a.body }) + '\n');
     writeFileSync(
       join(bin, 'gh'),
-      '#!/usr/bin/env bash\necho "[$GH_TOKEN] $*" >> "$GH_CALLS"\n[ "$GH_TOKEN" = maintainer-token ] && exit 1\nexit 0\n',
+      `#!/usr/bin/env bash\necho "[$GH_TOKEN] $*" >> "$GH_CALLS"\n[[ "$*" == *"--paginate"* ]] && cat "${thread}"\n[ "$GH_TOKEN" = maintainer-token ] && exit 1\nexit 0\n`,
     );
 
     const result = run({});
@@ -361,23 +382,55 @@ describe('decideRelayTarget', () => {
       target: 'codex',
       askId: a.id,
       reason: 'ask',
+      errors: [],
     });
     const o = objection();
     expect(decideRelayTarget({ comments: [a, o], roles }).askId).toBe(o.id);
   });
 
-  it('형식에 맞는 메시지가 없으면 askId 없이 Codex에게 넘긴다', () => {
+  it('Claude 메시지가 없으면 사용자에게 바로 알린다', () => {
     const plain = { id: 1, login: CLAUDE, body: '멈춤 보고: 구현 전' };
     expect(decideRelayTarget({ comments: [plain], roles })).toEqual({
-      target: 'codex',
+      target: 'user',
       askId: null,
-      reason: 'Claude 메시지 없음',
+      reason: 'Claude가 ask나 objection을 남기지 않음',
+      errors: [],
+    });
+  });
+
+  it('최신 Claude 메시지의 형식이 틀리면 이전의 정상 질문을 넘기지 않고 오류와 함께 사용자에게 알린다', () => {
+    const good = ask();
+    const broken = {
+      id: 9,
+      login: CLAUDE,
+      body: '<!-- ai-msg:v1 type=ask issue=104 -->\n### 단계\n\n구현 전',
+    };
+    const d = decideRelayTarget({ comments: [good, broken], roles });
+    expect(d).toMatchObject({ target: 'user', askId: 9, reason: 'Claude 메시지 형식 오류' });
+    expect(d.errors).toContain('본문 절 "### 질문"이 없거나 비어 있습니다.');
+  });
+
+  it('최신 Claude 메시지가 ask나 objection이 아니면 사용자에게 알린다', () => {
+    const report = {
+      id: 10,
+      login: CLAUDE,
+      body: formatMessage(
+        { type: 'report', issue: 104, pr: 111, head: 'a'.repeat(40) },
+        { 결과: '고침: 1', '실행한 검사': 'npm test' },
+      ),
+    };
+    expect(decideRelayTarget({ comments: [ask(), report], roles })).toMatchObject({
+      target: 'user',
+      reason: '마지막 Claude 메시지가 report임',
     });
   });
 
   it('다른 계정이 쓴 ask는 세지 않는다', () => {
     const fake = { ...ask(), login: 'someone' };
-    expect(decideRelayTarget({ comments: [fake], roles }).askId).toBeNull();
+    expect(decideRelayTarget({ comments: [fake], roles })).toMatchObject({
+      target: 'user',
+      askId: null,
+    });
   });
 
   it(`ask가 ${MAX_ASKS}회를 넘으면 사용자에게 바로 알린다`, () => {

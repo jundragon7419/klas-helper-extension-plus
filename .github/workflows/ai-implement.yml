@@ -63,21 +63,27 @@ jobs:
             const repo = context.repo;
             const dispatched = context.eventName === 'workflow_dispatch';
             const issue = dispatched ? Number(context.payload.inputs.issue) : context.payload.issue.number;
-            const stop = (message) => { core.warning(message); core.setOutput('skip', 'true'); };
+            const stop = async (message) => {
+              core.warning(message);
+              core.setOutput('skip', 'true');
+              // Codex 답으로 다시 부른 경우 AI relay는 알리지 않았으므로, 시작하지 못한 이유를 여기서 알린다.
+              await github.rest.issues.createComment({ ...context.repo, issue_number: issue,
+                body: `@${process.env.MAINTAINER} Codex 답으로 구현을 다시 시작하지 못했습니다: ${message}` }).catch(() => {});
+            };
 
             if (dispatched) {
               const { classifyCodexReply, rolesOf } = await import(`${process.env.GITHUB_WORKSPACE}/.ai-guard/scripts/ai/relay.js`);
               const roles = rolesOf({ codexBot: process.env.CODEX_BOT, maintainer: process.env.MAINTAINER });
               const { data: item } = await github.rest.issues.get({ ...repo, issue_number: issue });
-              if (item.pull_request) return stop(`#${issue}은 PR입니다.`);
+              if (item.pull_request) return await stop(`#${issue}은 PR입니다.`);
               const comments = (await github.paginate(github.rest.issues.listComments, { ...repo, issue_number: issue }))
                 .map((c) => ({ id: c.id, login: c.user?.login ?? '', body: c.body ?? '', url: c.html_url }));
               const answer = comments.find((c) => c.id === Number(context.payload.inputs.answer));
-              if (!answer) return stop(`#${issue}에 answer 댓글 ${context.payload.inputs.answer}가 없습니다.`);
+              if (!answer) return await stop(`#${issue}에 answer 댓글 ${context.payload.inputs.answer}가 없습니다.`);
               const reply = classifyCodexReply({ comment: answer, comments, roles, expectedIssue: issue });
-              if (reply.kind !== 'restart') return stop(`answer 댓글이 재시작 근거가 아닙니다: ${reply.kind} ${reply.errors.join(' ')}`);
+              if (reply.kind !== 'restart') return await stop(`answer 댓글이 재시작 근거가 아닙니다: ${reply.kind} ${reply.errors.join(' ')}`);
               const approved = comments.some((c) => c.login === process.env.MAINTAINER && c.body.startsWith('@claude'));
-              if (!approved) return stop(`#${issue}에 메인테이너의 @claude 승인이 없습니다.`);
+              if (!approved) return await stop(`#${issue}에 메인테이너의 @claude 승인이 없습니다.`);
               core.setOutput('trigger_url', answer.url);
             } else {
               core.setOutput('trigger_url', context.payload.comment.html_url);

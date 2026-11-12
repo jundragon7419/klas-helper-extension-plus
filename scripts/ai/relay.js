@@ -92,27 +92,61 @@ export async function resolveExpectedIssue({ github, repo, number }) {
   return expectedIssueOf({ number, headRef: pr.head.ref });
 }
 
+/** Claude가 남긴 ai-msg 메시지 중 가장 최근 것(형식이 틀린 것 포함). */
+function lastClaudeMessage(comments, roles) {
+  let last = null;
+  for (const c of comments) {
+    if (!roles.claude.includes(c.login)) continue;
+    const { message, errors } = validateMessage(c, roles);
+    if (message || errors.length) last = { id: c.id, message, errors };
+  }
+  return last;
+}
+
 /**
  * Claude가 멈췄을 때 Codex에게 넘길지, 사용자에게 바로 알릴지 정한다.
+ * Codex에게는 Claude의 형식에 맞는 최신 ask나 objection만 넘긴다. Codex 답은 그 메시지를 reply-to로 가리켜야 하기 때문이다.
  * @param {{comments: {id: number, login: string, body: string}[], roles: ReturnType<typeof rolesOf>}} input
- * @returns {{target: 'codex' | 'user', askId: number | null, reason: string}}
+ * @returns {{target: 'codex' | 'user', askId: number | null, reason: string, errors: string[]}}
  */
 export function decideRelayTarget({ comments, roles }) {
-  const stops = stopMessages(comments, roles);
-  const last = stops.at(-1);
-  // 형식에 맞는 메시지가 없으면 Codex가 스레드와 실행 기록을 읽고 판단한다.
-  if (!last) return { target: 'codex', askId: null, reason: 'Claude 메시지 없음' };
-  if (last.type === 'ask') {
-    const asks = stops.filter((s) => s.type === 'ask');
+  const latest = lastClaudeMessage(comments, roles);
+  if (!latest) {
+    return {
+      target: 'user',
+      askId: null,
+      reason: 'Claude가 ask나 objection을 남기지 않음',
+      errors: [],
+    };
+  }
+  if (latest.errors.length) {
+    return {
+      target: 'user',
+      askId: latest.id,
+      reason: 'Claude 메시지 형식 오류',
+      errors: latest.errors,
+    };
+  }
+  const type = latest.message.meta.type;
+  if (!stopTypes.includes(type)) {
+    return { target: 'user', askId: null, reason: `마지막 Claude 메시지가 ${type}임`, errors: [] };
+  }
+  if (type === 'ask') {
+    const asks = stopMessages(comments, roles).filter((s) => s.type === 'ask');
     if (asks.length > MAX_ASKS) {
-      return { target: 'user', askId: last.id, reason: `질문이 ${MAX_ASKS}회를 넘음` };
+      return {
+        target: 'user',
+        askId: latest.id,
+        reason: `질문이 ${MAX_ASKS}회를 넘음`,
+        errors: [],
+      };
     }
     const earlier = asks.slice(0, -1).map((s) => normalize(s.question));
-    if (earlier.includes(normalize(last.question))) {
-      return { target: 'user', askId: last.id, reason: '같은 질문이 반복됨' };
+    if (earlier.includes(normalize(asks.at(-1).question))) {
+      return { target: 'user', askId: latest.id, reason: '같은 질문이 반복됨', errors: [] };
     }
   }
-  return { target: 'codex', askId: last.id, reason: last.type };
+  return { target: 'codex', askId: latest.id, reason: type, errors: [] };
 }
 
 /**

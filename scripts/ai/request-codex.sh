@@ -33,7 +33,7 @@ GH_TOKEN="$ACTIONS_TOKEN" gh api "repos/$GH_REPO/issues/$TARGET/comments" --pagi
 plan=$(MAINTAINER="$MAINTAINER" node "$here/relay.js" plan "$tmp/thread.jsonl")
 target=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).target)' "$plan")
 ask_id=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).askId ?? ""))' "$plan")
-reason=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).reason)' "$plan")
+reason=$(node -e 'const p = JSON.parse(process.argv[1]); process.stdout.write([p.reason, ...p.errors].join(" / ").replace(/<!--/g, "&lt;!--").replace(/-->/g, "--&gt;"))' "$plan")
 if [ "$target" = user ]; then
   notify_now "$reason"
   exit 0

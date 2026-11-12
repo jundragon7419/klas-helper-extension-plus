@@ -34,10 +34,10 @@
 
 1. Claude가 `ask`(질문) 또는 `objection`(이견)을 남긴다(`AGENTS.md` "막혔을 때 (Claude)").
 2. 워크플로가 사용자 계정(`MAINTAINER_PR_TOKEN`)으로 `@codex` 요청을 달아 그 메시지를 넘긴다. 표시는 `<!-- ai-relay:... -->`이고 Claude 메시지의 댓글 ID를 적는다(`scripts/ai/request-codex.sh`).
-   - 이슈 하나에서 `ask`가 2회를 넘었거나 같은 질문이 반복되면 Codex에게 넘기지 않고 사용자에게 바로 알린다.
+   - 다음 경우에는 Codex에게 넘기지 않고 사용자에게 바로 알린다: Claude의 최신 ai-msg 메시지가 없거나 형식이 틀림(오류 목록을 함께 남긴다), 최신 메시지가 `ask`나 `objection`이 아님, 이슈 하나에서 `ask`가 2회를 넘음, 같은 질문이 반복됨. Codex 답은 Claude 메시지를 `reply-to`로 가리켜야 하므로, 넘길 메시지가 없으면 Codex가 답할 수 없다.
 3. Codex가 `answer` 또는 `need-user`로 답한다(`AGENTS.md` "질문 답변 (Codex)").
 4. `AI relay` 워크플로가 Codex 답을 분류한다(`scripts/ai/relay.js`).
-   - `answer`이고 `재시작: 예`: Claude를 다시 부른다. 이슈는 `AI implement`, PR은 `AI review loop`를 `workflow_dispatch`로 실행하고, 두 워크플로가 근거(이 스레드의 Claude 메시지에 대한 Codex 답, 이슈는 이전 메인테이너 `@claude` 승인)를 다시 확인한다. 사용자는 부르지 않는다.
+   - `answer`이고 `재시작: 예`이며 Claude 메시지와 답의 `issue` 값이 이 스레드의 이슈(PR은 PR이 닫는 이슈)와 같음: Claude를 다시 부른다. 이슈는 `AI implement`, PR은 `AI review loop`를 `workflow_dispatch`로 실행하고, 두 워크플로가 근거(이 스레드의 Claude 메시지에 대한 Codex 답, 이슈는 이전 메인테이너 `@claude` 승인)를 다시 확인한다. 사용자는 부르지 않는다. 다시 부른 워크플로가 근거 확인이나 회차 제한으로 시작하지 못하면 그 이유와 함께 사용자를 부른다.
    - `need-user`, `재시작: 아니오`, 형식 오류: 사용자를 멘션해 알린다. 형식 오류면 오류 목록도 남긴다.
    - 30분 안에 Codex 답이 없으면 그대로 알린다.
 5. 사용자는 필요한 정보를 `@codex`로 시작하는 댓글로 준다. Codex가 그 정보로 처음 질문에 `answer`를 다시 달면 4번으로 이어진다. 사용자가 직접 다시 시작하려면 이슈는 `@claude` 댓글, PR은 `ai:needs-human` 라벨 제거로 할 수 있다.

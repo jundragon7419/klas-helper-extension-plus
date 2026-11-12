@@ -27,6 +27,7 @@ export function decideRelayTarget(input: { comments: ThreadComment[]; roles: Rol
   target: 'codex' | 'user';
   askId: number | null;
   reason: string;
+  errors: string[];
 };
 
 export function expectedIssueOf(input: { number: number; headRef?: string | null }): number | null;

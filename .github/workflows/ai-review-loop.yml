@@ -158,6 +158,11 @@ jobs:
               d = reply.kind === 'restart'
                 ? decideAnswerRestart({ labels, open: pr.state === 'open', sameRepo, answerId })
                 : { action: 'none', reason: `answer ${answerId} is not a restart (${reply.kind})`, addLabels: [], removeLabels: [] };
+              // 재시작하지 못하면(회차 제한, 근거 불일치) AI relay는 답이 재시작이라 알리지 않으므로 여기서 알린다.
+              if (d.action !== 'fix' && pr.state === 'open') {
+                await github.rest.issues.createComment({ ...repo, issue_number: number,
+                  body: `@${process.env.MAINTAINER} Codex 답(댓글 ${answerId})으로 검토 반영을 다시 시작하지 못했습니다: ${d.reason}. 직접 확인해 주세요.` });
+              }
             } else {
               d = decideReview({
                 labels, open: pr.state === 'open', sameRepo,
