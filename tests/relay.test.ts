@@ -3,7 +3,17 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { decidePing, PING_TIMEOUT_MS, pingBody, relayRequestBody } from '../scripts/ai/relay.js';
+import { formatMessage } from '../scripts/ai/ai-msg.js';
+import {
+  classifyCodexReply,
+  decidePing,
+  decideRelayTarget,
+  MAX_ASKS,
+  PING_TIMEOUT_MS,
+  pingBody,
+  relayRequestBody,
+  rolesOf,
+} from '../scripts/ai/relay.js';
 
 // 자동 흐름이 멈췄을 때의 Codex 요청과 메인테이너 알림(scripts/ai/relay.js, request-codex.sh)을 검사한다.
 const CODEX = 'chatgpt-codex-connector[bot]';
@@ -41,6 +51,14 @@ describe('relayRequestBody', () => {
     expect(body).toContain('코드는 바꾸지 말고');
     expect(body).toContain('https://example.test/run/9');
     expect(body).toContain('<!-- ai-relay:run-9 -->');
+  });
+
+  it('askId가 있으면 그 메시지에 ai-msg 형식으로 답하게 한다', () => {
+    const body = relayRequestBody('implement', { runUrl: 'u', key: 'k', askId: 77 });
+    expect(body).toContain('댓글 ID 77');
+    expect(body).toContain('reply-to에 77');
+    expect(body).toContain('`answer`');
+    expect(body).toContain('`need-user`');
   });
 
   it('모르는 멈춤 종류는 거부한다', () => {
@@ -171,6 +189,45 @@ describe.skipIf(!hasBash)('request-codex.sh', () => {
     );
   });
 
+  // 댓글 목록 요청에는 THREAD 파일 내용을 돌려주는 가짜 gh
+  const threadGh = (lines: object[]) => {
+    const thread = join(root, 'thread-input.jsonl');
+    writeFileSync(thread, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    writeFileSync(
+      join(bin, 'gh'),
+      `#!/usr/bin/env bash\necho "[$GH_TOKEN] $*" >> "$GH_CALLS"\n[[ "$*" == *"--paginate"* ]] && cat "${thread}"\nexit 0\n`,
+    );
+  };
+
+  it('Claude의 ask ID를 요청 본문에 넣는다', () => {
+    const a = { ...ask(), id: 4242 };
+    threadGh([{ id: a.id, login: a.login, body: a.body }]);
+
+    const result = run({});
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(join(root, 'codex-request.md'), 'utf8')).toContain('댓글 ID 4242');
+  });
+
+  it('ask가 너무 많으면 Codex에게 요청하지 않고 바로 알린다', () => {
+    threadGh(
+      Array.from({ length: MAX_ASKS + 1 }, (_, i) => {
+        const a = ask(`질문 ${i}`);
+        return { id: a.id, login: a.login, body: a.body };
+      }),
+    );
+
+    const result = run({});
+
+    expect(result.status, result.stderr).toBe(0);
+    const log = readFileSync(calls, 'utf8');
+    expect(log).not.toContain('[maintainer-token] api -X POST');
+    expect(log).toContain(
+      `[actions-token] api -X POST repos/owner/repo/issues/105/comments -f body=@${ME}`,
+    );
+    expect(log).toContain('질문이 2회를 넘음');
+  });
+
   it('메인테이너 토큰으로 요청을 달지 못하면 Actions 토큰으로 바로 알린다', () => {
     writeFileSync(
       join(bin, 'gh'),
@@ -180,7 +237,7 @@ describe.skipIf(!hasBash)('request-codex.sh', () => {
     const result = run({});
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('Codex 요청을 달지 못해');
+    expect(result.stdout).toContain('Codex 요청을 달지 못함');
     expect(readFileSync(calls, 'utf8')).toContain(
       `[actions-token] api -X POST repos/owner/repo/issues/105/comments -f body=@${ME}`,
     );
@@ -256,5 +313,175 @@ describe.skipIf(!hasBash)('request-review.sh', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('MAINTAINER_PR_TOKEN');
     expect(readCalls()).not.toContain('comments');
+  });
+});
+
+// Claude 질문(ask, objection)과 Codex 답(answer, need-user)의 흐름
+const CLAUDE = 'claude[bot]';
+const roles = rolesOf({ codexBot: CODEX, maintainer: ME });
+let nextId = 100;
+const ask = (question = '진도율 셀은 어디인가?', id = nextId++) => ({
+  id,
+  login: CLAUDE,
+  body: formatMessage(
+    { type: 'ask', issue: 104 },
+    { 단계: '구현 전', 질문: question, '확인한 것': 'utils/' },
+  ),
+});
+const objection = (id = nextId++) => ({
+  id,
+  login: CLAUDE,
+  body: formatMessage(
+    { type: 'objection', issue: 104 },
+    { '문제 항목': '지적 1', 근거: 'tests/a.test.ts', 제안: '그대로 둔다' },
+  ),
+});
+const answer = (replyTo: number, restart = '예', login = CODEX) => ({
+  id: nextId++,
+  login,
+  body: formatMessage(
+    { type: 'answer', issue: 104, 'reply-to': replyTo },
+    { 답: '두 번째 열', 근거: 'docs/', 재시작: restart },
+  ),
+});
+const needUser = (replyTo: number) => ({
+  id: nextId++,
+  login: CODEX,
+  body: formatMessage(
+    { type: 'need-user', issue: 104, 'reply-to': replyTo },
+    { '확인할 것': '표 구조', '확인 방법': '개발자 도구', '붙일 것': 'DOM 발췌' },
+  ),
+});
+
+describe('decideRelayTarget', () => {
+  it('Claude의 마지막 ask나 objection을 Codex에게 넘긴다', () => {
+    const a = ask();
+    expect(decideRelayTarget({ comments: [a], roles })).toEqual({
+      target: 'codex',
+      askId: a.id,
+      reason: 'ask',
+    });
+    const o = objection();
+    expect(decideRelayTarget({ comments: [a, o], roles }).askId).toBe(o.id);
+  });
+
+  it('형식에 맞는 메시지가 없으면 askId 없이 Codex에게 넘긴다', () => {
+    const plain = { id: 1, login: CLAUDE, body: '멈춤 보고: 구현 전' };
+    expect(decideRelayTarget({ comments: [plain], roles })).toEqual({
+      target: 'codex',
+      askId: null,
+      reason: 'Claude 메시지 없음',
+    });
+  });
+
+  it('다른 계정이 쓴 ask는 세지 않는다', () => {
+    const fake = { ...ask(), login: 'someone' };
+    expect(decideRelayTarget({ comments: [fake], roles }).askId).toBeNull();
+  });
+
+  it(`ask가 ${MAX_ASKS}회를 넘으면 사용자에게 바로 알린다`, () => {
+    const asks = Array.from({ length: MAX_ASKS + 1 }, (_, i) => ask(`질문 ${i}`));
+    expect(decideRelayTarget({ comments: asks, roles })).toMatchObject({
+      target: 'user',
+      reason: `질문이 ${MAX_ASKS}회를 넘음`,
+    });
+    expect(decideRelayTarget({ comments: asks.slice(0, MAX_ASKS), roles }).target).toBe('codex');
+  });
+
+  it('같은 질문을 다시 하면 사용자에게 바로 알린다', () => {
+    const comments = [ask('표가 몇 개인가?'), ask('표가   몇 개인가?')];
+    expect(decideRelayTarget({ comments, roles })).toMatchObject({
+      target: 'user',
+      reason: '같은 질문이 반복됨',
+    });
+  });
+});
+
+describe('classifyCodexReply', () => {
+  it('Claude ask에 답하고 재시작이 예면 restart', () => {
+    const a = ask();
+    const reply = answer(a.id);
+    expect(classifyCodexReply({ comment: reply, comments: [a, reply], roles })).toEqual({
+      kind: 'restart',
+      errors: [],
+      replyTo: a.id,
+    });
+  });
+
+  it('objection에 대한 답도 근거로 인정한다', () => {
+    const o = objection();
+    expect(classifyCodexReply({ comment: answer(o.id), comments: [o], roles }).kind).toBe(
+      'restart',
+    );
+  });
+
+  it('재시작이 아니오면 hold, need-user는 need-user', () => {
+    const a = ask();
+    expect(classifyCodexReply({ comment: answer(a.id, '아니오'), comments: [a], roles }).kind).toBe(
+      'hold',
+    );
+    expect(classifyCodexReply({ comment: needUser(a.id), comments: [a], roles }).kind).toBe(
+      'need-user',
+    );
+  });
+
+  it('reply-to가 이 스레드의 Claude 메시지가 아니면 invalid', () => {
+    const a = ask();
+    const result = classifyCodexReply({ comment: answer(999_999), comments: [a], roles });
+    expect(result.kind).toBe('invalid');
+    expect(result.errors[0]).toContain('reply-to 999999');
+  });
+
+  it('형식이 틀린 답은 invalid, ai-msg가 아닌 댓글과 다른 계정은 other', () => {
+    const a = ask();
+    const broken = { id: 1, login: CODEX, body: '<!-- ai-msg:v1 type=answer issue= -->' };
+    expect(classifyCodexReply({ comment: broken, comments: [a], roles }).kind).toBe('invalid');
+    const plain = { id: 2, login: CODEX, body: '사용자가 할 일: ...' };
+    expect(classifyCodexReply({ comment: plain, comments: [a], roles }).kind).toBe('other');
+    expect(
+      classifyCodexReply({ comment: answer(a.id, '예', 'someone'), comments: [a], roles }).kind,
+    ).toBe('other');
+  });
+});
+
+describe('decidePing와 Codex 답', () => {
+  const withTime = <T extends object>(c: T, minutes: number) => ({ ...c, createdAt: at(minutes) });
+
+  it('Codex 답이 재시작이면 알리지 않는다', () => {
+    const a = withTime(ask(), -1);
+    const reply = withTime(answer(a.id), 2);
+    const d = decidePing({
+      comments: [a, relay(), reply],
+      now: T0 + 5 * 60_000,
+      codexBot: CODEX,
+      maintainer: ME,
+      pingBot: PING_BOT,
+      roles,
+    });
+    expect(d.ping).toBeNull();
+  });
+
+  it('need-user, hold, 형식 오류면 알린다', () => {
+    const a = withTime(ask(), -1);
+    for (const reply of [
+      needUser(a.id),
+      answer(a.id, '아니오'),
+      { id: 3, login: CODEX, body: '<!-- ai-msg:v1 type=answer -->' },
+    ]) {
+      const d = decidePing({
+        comments: [a, relay(), withTime(reply, 2)],
+        now: T0 + 5 * 60_000,
+        codexBot: CODEX,
+        maintainer: ME,
+        pingBot: PING_BOT,
+        roles,
+      });
+      expect(d.ping).toBe('codex');
+    }
+  });
+
+  it('리뷰 응답 댓글은 Codex 답으로 보지 않는다', () => {
+    const receipt = { login: CODEX, body: '<!-- codex-review-receipt:v1 -->', createdAt: at(2) };
+    expect(decide([relay(), receipt]).ping).toBeNull();
   });
 });

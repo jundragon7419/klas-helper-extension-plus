@@ -166,6 +166,19 @@ describe('validateMessage', () => {
     });
   });
 
+  it('정상 표시 줄 뒤에 코드 블록 밖의 표시 줄이 또 있으면 실패한다', () => {
+    const extra = formatHeader({ type: 'answer', issue: 999 });
+    const body = `${formatMessage({ type: 'ask', issue: 104 }, fill('ask'))}\n${extra}\n`;
+    expect(check(CLAUDE, body)).toEqual({
+      message: null,
+      errors: ['표시 줄이 두 개 이상 있습니다.'],
+    });
+
+    const fence = '`'.repeat(3);
+    const quoted = `${formatMessage({ type: 'ask', issue: 104 }, fill('ask'))}\n${fence}\n${extra}\n${fence}\n`;
+    expect(check(CLAUDE, quoted).errors).toEqual([]);
+  });
+
   it('상속된 속성 이름의 종류도 알 수 없는 종류로 알린다', () => {
     for (const type of ['constructor', 'toString', '__proto__']) {
       expect(check(CLAUDE, `<!-- ai-msg:v1 type=${type} issue=1 -->`).errors).toEqual([

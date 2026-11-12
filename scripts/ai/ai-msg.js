@@ -161,15 +161,18 @@ function locateHeader(lines) {
     index = 1;
   }
   const line = (lines[index] ?? '').trim();
+  // 코드 블록 밖에서 표시 줄 자리가 아닌 곳에 있는 표시 줄
+  const fenced = fencedLines(lines);
+  const stray = lines.some(
+    (raw, i) => i !== index && !fenced[i] && HEADER_CANDIDATE_RE.test(raw.trim()),
+  );
   if (HEADER_CANDIDATE_RE.test(line)) {
     const header = HEADER_RE.exec(line);
-    return header
-      ? { status: 'ok', index, mention, header }
-      : { status: 'malformed', reason: `표시 줄 문법이 다릅니다: ${line}` };
+    if (!header) return { status: 'malformed', reason: `표시 줄 문법이 다릅니다: ${line}` };
+    if (stray) return { status: 'malformed', reason: '표시 줄이 두 개 이상 있습니다.' };
+    return { status: 'ok', index, mention, header };
   }
-  // 코드 블록 밖의 다른 줄에 표시 줄이 있으면 위치가 틀린 메시지다.
-  const fenced = fencedLines(lines);
-  if (lines.some((raw, i) => !fenced[i] && HEADER_CANDIDATE_RE.test(raw.trim()))) {
+  if (stray) {
     return {
       status: 'malformed',
       reason: '표시 줄은 첫 줄, 또는 멘션만 있는 첫 줄 바로 다음 줄에 있어야 합니다.',

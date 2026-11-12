@@ -28,28 +28,33 @@
 - 수정 3회 뒤에도 지적이 남음
 - Claude가 지적에 동의하지 않아 코드를 바꾸지 않음
 - 마지막 커밋 뒤 3시간 동안 Codex 리뷰가 없음
+- PR 브랜치에 Codex가 커밋을 올림(Codex는 코드를 바꾸지 않는 역할)
 
-멈추면 사용자에게 말하는 쪽은 Codex 하나다.
+멈추면 Codex가 먼저 답하고, Codex가 답할 수 없을 때만 사용자에게 넘어간다.
 
-1. Claude는 멈춘 원인과 근거를 "멈춤 보고"로 남긴다(`AGENTS.md` 형식). 사용자에게 직접 요청하지 않는다.
-2. 워크플로가 사용자 계정(`MAINTAINER_PR_TOKEN`)으로 `@codex` 정리 요청을 단다. 표시는 `<!-- ai-relay:... -->`다.
-3. Codex가 멈춤 보고를 읽고 저장소로 답할 수 있으면 답하고, 아니면 사용자가 할 일을 정리한다(`AGENTS.md` "멈춤 정리").
-4. `AI relay` 워크플로가 Codex 정리 댓글을 보면 사용자를 멘션해 알린다. 30분 안에 정리가 없으면 그대로 알린다.
-5. 사용자가 필요한 정보를 주면 Codex가 이슈에 정리해 올린다. 이슈는 `@claude` 댓글로 다시 시작하고(라벨은 자동으로 지워진다), PR은 사용자가 `ai:needs-human` 라벨을 지우면 다음 Codex 리뷰나 CI 결과부터 다시 판단한다.
+1. Claude가 `ask`(질문) 또는 `objection`(이견)을 남긴다(`AGENTS.md` "막혔을 때 (Claude)").
+2. 워크플로가 사용자 계정(`MAINTAINER_PR_TOKEN`)으로 `@codex` 요청을 달아 그 메시지를 넘긴다. 표시는 `<!-- ai-relay:... -->`이고 Claude 메시지의 댓글 ID를 적는다(`scripts/ai/request-codex.sh`).
+   - 이슈 하나에서 `ask`가 2회를 넘었거나 같은 질문이 반복되면 Codex에게 넘기지 않고 사용자에게 바로 알린다.
+3. Codex가 `answer` 또는 `need-user`로 답한다(`AGENTS.md` "질문 답변 (Codex)").
+4. `AI relay` 워크플로가 Codex 답을 분류한다(`scripts/ai/relay.js`).
+   - `answer`이고 `재시작: 예`: Claude를 다시 부른다. 이슈는 `AI implement`, PR은 `AI review loop`를 `workflow_dispatch`로 실행하고, 두 워크플로가 근거(이 스레드의 Claude 메시지에 대한 Codex 답, 이슈는 이전 메인테이너 `@claude` 승인)를 다시 확인한다. 사용자는 부르지 않는다.
+   - `need-user`, `재시작: 아니오`, 형식 오류: 사용자를 멘션해 알린다. 형식 오류면 오류 목록도 남긴다.
+   - 30분 안에 Codex 답이 없으면 그대로 알린다.
+5. 사용자는 필요한 정보를 `@codex`로 시작하는 댓글로 준다. Codex가 그 정보로 처음 질문에 `answer`를 다시 달면 4번으로 이어진다. 사용자가 직접 다시 시작하려면 이슈는 `@claude` 댓글, PR은 `ai:needs-human` 라벨 제거로 할 수 있다.
 
 Codex 리뷰가 오지 않는 경우(3시간 무응답)는 Codex에게 요청하지 않고 바로 사용자에게 알린다.
 
 ### 메시지 형식으로 옮기는 중
 
-AI 간 메시지는 `AGENTS.md` "AI 메시지 형식"(ai-msg v1)으로 옮긴다. 형식과 검사(`scripts/ai/ai-msg.js`)는 정해졌고, 워크플로는 아직 아래 왼쪽의 표시를 쓴다. 실제 교체는 #117(질문 흐름), #118(PR 수정 요청)에서 한다.
+AI 간 메시지는 `AGENTS.md` "AI 메시지 형식"(ai-msg v1)으로 옮긴다. 질문 흐름(`ask`, `objection`, `answer`, `need-user`)은 옮겼고, 남은 것은 #118(PR 수정 요청)에서 옮긴다.
 
-| 지금 쓰는 것 | 옮길 종류 | 바뀌는 점 |
+| 지금 쓰는 것 | 옮길 종류 | 상태 |
 |---|---|---|
-| `@claude` 시작 댓글 | `start` | 승인한 사용자 댓글 ID(`reply-to`)와 계획 개정 번호를 함께 적는다 |
-| 멈춤 보고(Claude) | `ask` 또는 `objection` | 질문마다 답에 따라 달라지는 구현을 적는다. 계획에 동의하지 않으면 `objection` |
-| 멈춤 정리(Codex) | `answer` 또는 `need-user` | 답할 수 있으면 `answer`로 Claude를 다시 진행시키고, 없을 때만 `need-user` |
-| `<!-- ai-handled:... -->` 처리 댓글 | `report` | 지적별 `고침:`/`이견:`에 새 head와 실행한 검사를 더한다. 처리한 지적 ID는 `reply-to`로 남긴다 |
-| `<!-- ai-relay:... -->` 정리 요청 | 워크플로가 `ask`를 Codex에게 전달하는 댓글 | 메시지가 아니라 호출이다. 전달할 `ask`의 댓글 ID를 적는다 |
+| 멈춤 보고(Claude) | `ask` 또는 `objection` | 옮김 |
+| 멈춤 정리(Codex) | `answer` 또는 `need-user` | 옮김 |
+| `@claude` 시작 댓글 | `start` | #118 |
+| `<!-- ai-handled:... -->` 처리 댓글 | `report` | #118 |
+| `<!-- ai-relay:... -->` 요청 | 그대로 둔다 | 메시지가 아니라 Codex 호출이다. 넘길 Claude 메시지의 댓글 ID를 적는다 |
 | `<!-- ai-pinged:... -->` 알림 | 그대로 둔다 | 사용자 알림이라 AI 메시지가 아니다 |
 
 | 라벨 | 뜻 |
