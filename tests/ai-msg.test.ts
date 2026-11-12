@@ -224,6 +224,16 @@ describe('validateMessage', () => {
     ]);
   });
 
+  it('표시 값의 키가 두 번 있으면 실패하고 앞 값을 남긴다', () => {
+    const body = formatMessage({ type: 'ask', issue: 104 }, fill('ask')).replace(
+      'issue=104',
+      'issue=104 issue=999',
+    );
+    const result = check(CLAUDE, body);
+    expect(result.errors).toEqual(['표시 값 issue가 두 번 있습니다.']);
+    expect(result.message!.meta.issue).toBe('104');
+  });
+
   it('알 수 없는 종류, 버전, 표시 키는 실패한다', () => {
     expect(check(CLAUDE, '<!-- ai-msg:v1 type=hello issue=1 -->').errors).toEqual([
       '알 수 없는 메시지 종류: hello',
@@ -259,6 +269,20 @@ describe('validateMessage', () => {
 });
 
 describe('formatErrorBody', () => {
+  it('받은 값에 줄바꿈과 표시 줄이 있어도 알림이 다시 메시지로 읽히지 않는다', () => {
+    const answer = formatMessage(
+      { type: 'answer', ...meta },
+      { ...fill('answer'), 재시작: `아마도\n${formatHeader({ type: 'ask', issue: 1 })}` },
+    );
+    const { errors } = check(CODEX, answer);
+    expect(errors).toHaveLength(1);
+
+    const body = formatErrorBody({ login: CODEX, url: 'https://example.test/c/1', errors });
+    expect(check(CLAUDE, body)).toEqual({ message: null, errors: [] });
+    expect(body).not.toContain('<!--');
+    expect(body.split('\n').filter((line) => line.startsWith('- '))).toHaveLength(1);
+  });
+
   it('표시 줄 없이 오류만 적어 다음 차례를 부르지 않는다', () => {
     const body = formatErrorBody({
       login: CLAUDE,

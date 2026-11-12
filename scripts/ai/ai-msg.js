@@ -183,7 +183,7 @@ const splitLines = (body) => (body ?? '').replace(/\r\n/g, '\n').split('\n');
 /**
  * 댓글 본문에서 메시지를 읽는다. 메시지가 아니거나 표시 줄이 틀리면 null.
  * 코드 블록(``` 또는 ~~~, 더 긴 경계 포함) 안의 `### ` 줄은 절 제목으로 보지 않는다.
- * @returns {null | {version: string, mention: string | null, meta: Record<string, string>, fields: Record<string, string>, duplicates: string[]}}
+ * @returns {null | {version: string, mention: string | null, meta: Record<string, string>, fields: Record<string, string>, duplicates: string[], duplicateKeys: string[]}}
  */
 export function parseMessage(body) {
   const lines = splitLines(body);
@@ -191,10 +191,14 @@ export function parseMessage(body) {
   if (found.status !== 'ok') return null;
   const { index, mention, header } = found;
 
+  // 같은 키가 두 번 있으면 뒤 값으로 덮어쓰지 않고 첫 값을 남긴 채 중복으로 기록한다.
   const meta = {};
+  const duplicateKeys = [];
   for (const pair of header[2].trim().split(' ').filter(Boolean)) {
     const at = pair.indexOf('=');
-    meta[pair.slice(0, at)] = pair.slice(at + 1);
+    const key = pair.slice(0, at);
+    if (Object.hasOwn(meta, key)) duplicateKeys.push(key);
+    else meta[key] = pair.slice(at + 1);
   }
 
   const fields = {};
@@ -213,7 +217,7 @@ export function parseMessage(body) {
     }
   }
   for (const name of Object.keys(fields)) fields[name] = fields[name].trim();
-  return { version: header[1], mention, meta, fields, duplicates };
+  return { version: header[1], mention, meta, fields, duplicates, duplicateKeys };
 }
 
 /**
@@ -236,6 +240,7 @@ export function validateMessage(comment, roles) {
   }
   const unknown = Object.keys(message.meta).filter((key) => !HEADER_KEYS.includes(key));
   if (unknown.length) errors.push(`알 수 없는 표시 값: ${unknown.join(', ')}`);
+  for (const key of new Set(message.duplicateKeys)) errors.push(`표시 값 ${key}가 두 번 있습니다.`);
 
   const spec = specOf(message.meta.type);
   if (!spec) {
@@ -280,13 +285,23 @@ export function validateMessage(comment, roles) {
   return { message, errors };
 }
 
+/**
+ * 오류 문구를 댓글 한 줄로 만든다. 오류에는 받은 값이 그대로 들어갈 수 있으므로
+ * 줄바꿈을 없애고 `<!--`를 바꿔, 알림 댓글이 다시 메시지나 숨은 표시로 읽히지 않게 한다.
+ */
+const oneLine = (text) =>
+  String(text)
+    .replace(/\s*\r?\n\s*/g, ' / ')
+    .replace(/<!--/g, '&lt;!--')
+    .replace(/-->/g, '--&gt;');
+
 /** 형식 오류를 보낸 쪽에 알리는 댓글 본문. 이 댓글은 표시 줄이 없어 다음 차례를 부르지 않는다. */
 export function formatErrorBody({ login, url, errors }) {
   return [
-    `메시지 형식 오류(${login}): 다음 차례를 호출하지 않았습니다. AGENTS.md "AI 메시지 형식"에 맞춰 다시 보내야 합니다.`,
+    `메시지 형식 오류(${oneLine(login)}): 다음 차례를 호출하지 않았습니다. AGENTS.md "AI 메시지 형식"에 맞춰 다시 보내야 합니다.`,
     '',
-    `대상 댓글: ${url}`,
+    `대상 댓글: ${oneLine(url)}`,
     '',
-    ...errors.map((e) => `- ${e}`),
+    ...errors.map((e) => `- ${oneLine(e)}`),
   ].join('\n');
 }

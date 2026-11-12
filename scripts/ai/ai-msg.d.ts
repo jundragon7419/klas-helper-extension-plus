@@ -47,6 +47,7 @@ export interface ParsedMessage {
   meta: Record<string, string>;
   fields: Record<string, string>;
   duplicates: string[];
+  duplicateKeys: string[];
 }
 
 export function parseMessage(body: string | null | undefined): ParsedMessage | null;
