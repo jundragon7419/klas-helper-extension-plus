@@ -61,10 +61,35 @@ function stopMessages(comments, roles) {
     if (!roles.claude.includes(c.login)) continue;
     const { message, errors } = validateMessage(c, roles);
     if (message && errors.length === 0 && stopTypes.includes(message.meta.type)) {
-      out.push({ id: c.id, type: message.meta.type, question: message.fields['질문'] ?? '' });
+      out.push({
+        id: c.id,
+        type: message.meta.type,
+        issue: Number(message.meta.issue),
+        question: message.fields['질문'] ?? '',
+      });
     }
   }
   return out;
+}
+
+/**
+ * 메시지의 issue 값과 비교할 이슈 번호. 이슈 스레드는 그 이슈 번호,
+ * PR 스레드는 PR이 닫는 이슈 번호(브랜치 이름 `<종류>/<이슈 번호>-...`, CI가 검사한다)다.
+ * @param {{number: number, headRef?: string | null}} input headRef는 PR일 때만 준다.
+ * @returns {number | null} PR 브랜치 이름에서 번호를 찾지 못하면 null
+ */
+export function expectedIssueOf({ number, headRef = null }) {
+  if (headRef === null) return number;
+  const match = /^[a-z]+\/([1-9]\d*)-/.exec(headRef);
+  return match ? Number(match[1]) : null;
+}
+
+/** GitHub API로 이슈나 PR 번호의 기대 이슈 번호를 구한다(워크플로용). */
+export async function resolveExpectedIssue({ github, repo, number }) {
+  const { data: item } = await github.rest.issues.get({ ...repo, issue_number: number });
+  if (!item.pull_request) return expectedIssueOf({ number });
+  const { data: pr } = await github.rest.pulls.get({ ...repo, pull_number: number });
+  return expectedIssueOf({ number, headRef: pr.head.ref });
 }
 
 /**
@@ -95,11 +120,12 @@ export function decideRelayTarget({ comments, roles }) {
  * - restart: 이 스레드의 Claude ask나 objection에 답했고 재시작이 예
  * - hold: 답했지만 재시작이 아니오
  * - need-user: 사용자 확인이 필요함
- * - invalid: ai-msg 형식 오류, 또는 근거가 된 Claude 메시지를 찾을 수 없음
+ * - invalid: ai-msg 형식 오류, 근거가 된 Claude 메시지를 찾을 수 없음, 또는 issue 값이 이 스레드의 이슈와 다름
  * - other: ai-msg가 아닌 댓글(리뷰 요약 등)이나 다른 종류
+ * expectedIssue는 expectedIssueOf로 구한 번호다. Claude 메시지와 Codex 답의 issue 값이 모두 이 번호여야 한다.
  * @returns {{kind: 'restart' | 'hold' | 'need-user' | 'invalid' | 'other', errors: string[], replyTo?: number}}
  */
-export function classifyCodexReply({ comment, comments, roles }) {
+export function classifyCodexReply({ comment, comments, roles, expectedIssue }) {
   if (!roles.codex.includes(comment.login)) return { kind: 'other', errors: [] };
   const { message, errors } = validateMessage(comment, roles);
   if (!message) return errors.length ? { kind: 'invalid', errors } : { kind: 'other', errors: [] };
@@ -108,11 +134,23 @@ export function classifyCodexReply({ comment, comments, roles }) {
   const type = message.meta.type;
   if (type !== 'answer' && type !== 'need-user') return { kind: 'other', errors: [] };
   const replyTo = Number(message.meta['reply-to']);
-  const asked = stopMessages(comments, roles).some((s) => s.id === replyTo);
+  const asked = stopMessages(comments, roles).find((s) => s.id === replyTo);
   if (!asked) {
     return {
       kind: 'invalid',
       errors: [`reply-to ${replyTo}가 이 스레드에 있는 Claude의 ask나 objection이 아닙니다.`],
+    };
+  }
+  if (typeof expectedIssue !== 'number') {
+    return { kind: 'invalid', errors: ['이 스레드의 이슈 번호를 알 수 없습니다.'] };
+  }
+  const issues = [Number(message.meta.issue), asked.issue];
+  if (issues.some((n) => n !== expectedIssue)) {
+    return {
+      kind: 'invalid',
+      errors: [
+        `issue 값이 이 스레드의 이슈 #${expectedIssue}와 다릅니다 (answer ${issues[0]}, Claude 메시지 ${issues[1]}).`,
+      ],
     };
   }
   if (type === 'need-user') return { kind: 'need-user', errors: [], replyTo };
@@ -133,9 +171,10 @@ export function classifyCodexReply({ comment, comments, roles }) {
  * @param {string} input.maintainer 요청을 다는 메인테이너 로그인
  * @param {string} input.pingBot 알림 댓글을 다는 봇 로그인
  * @param {ReturnType<typeof rolesOf>} [input.roles]
+ * @param {number | null} [input.expectedIssue] classifyCodexReply에 넘길 이슈 번호
  * @returns {{ping: null | 'codex' | 'timeout', key?: string}}
  */
-export function decidePing({ comments, now, codexBot, maintainer, pingBot, roles }) {
+export function decidePing({ comments, now, codexBot, maintainer, pingBot, roles, expectedIssue }) {
   let relay = null;
   for (const c of comments) {
     const match = /<!-- ai-relay:([\w.-]+) -->/.exec(c.body);
@@ -157,7 +196,10 @@ export function decidePing({ comments, now, codexBot, maintainer, pingBot, roles
       !c.body.includes('codex-review-receipt'),
   );
   if (answer) {
-    if (roles && classifyCodexReply({ comment: answer, comments, roles }).kind === 'restart') {
+    if (
+      roles &&
+      classifyCodexReply({ comment: answer, comments, roles, expectedIssue }).kind === 'restart'
+    ) {
       return { ping: null };
     }
     return { ping: 'codex', key: relay.key };

@@ -74,7 +74,7 @@ jobs:
                 .map((c) => ({ id: c.id, login: c.user?.login ?? '', body: c.body ?? '', url: c.html_url }));
               const answer = comments.find((c) => c.id === Number(context.payload.inputs.answer));
               if (!answer) return stop(`#${issue}에 answer 댓글 ${context.payload.inputs.answer}가 없습니다.`);
-              const reply = classifyCodexReply({ comment: answer, comments, roles });
+              const reply = classifyCodexReply({ comment: answer, comments, roles, expectedIssue: issue });
               if (reply.kind !== 'restart') return stop(`answer 댓글이 재시작 근거가 아닙니다: ${reply.kind} ${reply.errors.join(' ')}`);
               const approved = comments.some((c) => c.login === process.env.MAINTAINER && c.body.startsWith('@claude'));
               if (!approved) return stop(`#${issue}에 메인테이너의 @claude 승인이 없습니다.`);

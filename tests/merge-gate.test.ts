@@ -79,6 +79,46 @@ describe('decideGate', () => {
     expect(d.state).toBe('success');
   });
 
+  // PR #129: Codex가 리뷰를 작업 결과 댓글로 남긴 경우
+  const taskReview = (sha: string, tags: string[]) => ({
+    login: CODEX,
+    body: [
+      '## 검토 결과',
+      ...tags.map(
+        (tag) =>
+          `- **[${tag}] 지적 제목**  \n  설명 [scripts/ai/relay.jsL1](https://github.com/o/r/blob/${sha}/scripts/ai/relay.js#L1)`,
+      ),
+      '',
+      `[scripts/a.js](https://github.com/o/r/blob/${sha}/scripts/a.js)`,
+      '',
+      ' [View task →](https://chatgpt.com/s/cd_1)',
+    ].join('\n'),
+  });
+
+  it('현재 커밋을 가리키는 작업 결과 댓글도 리뷰로 인정하고 [P0]/[P1]을 센다', () => {
+    expect(decideGate(input({ comments: [taskReview(HEAD, [])] })).state).toBe('success');
+    expect(decideGate(input({ comments: [taskReview(HEAD, ['P2'])] })).state).toBe('success');
+    expect(decideGate(input({ comments: [taskReview(HEAD, ['P1', 'P0'])] }))).toEqual({
+      state: 'failure',
+      description: 'Codex P0/P1 지적 2건이 현재 커밋에 있음',
+    });
+  });
+
+  it('이전 커밋을 가리키는 작업 결과 댓글은 세지 않는다', () => {
+    expect(decideGate(input({ comments: [taskReview(OLD, ['P1'])] })).state).toBe('pending');
+  });
+
+  it('ai-msg 메시지와 다른 계정의 댓글은 작업 결과 리뷰로 보지 않는다', () => {
+    const msg = {
+      login: CODEX,
+      body: `<!-- ai-msg:v1 type=answer issue=1 pr=- head=- rev=- reply-to=2 -->\n${taskReview(HEAD, ['P1']).body}`,
+    };
+    expect(decideGate(input({ comments: [msg] })).state).toBe('pending');
+    expect(
+      decideGate(input({ comments: [{ ...taskReview(HEAD, ['P1']), login: 'someone' }] })).state,
+    ).toBe('pending');
+  });
+
   it('다른 계정이 단 배지는 세지 않는다', () => {
     const fake = { ...finding('P0'), login: 'someone' };
     expect(decideGate(input({ inlineComments: [fake] })).state).toBe('success');

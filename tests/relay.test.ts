@@ -8,6 +8,7 @@ import {
   classifyCodexReply,
   decidePing,
   decideRelayTarget,
+  expectedIssueOf,
   MAX_ASKS,
   PING_TIMEOUT_MS,
   pingBody,
@@ -401,7 +402,9 @@ describe('classifyCodexReply', () => {
   it('Claude ask에 답하고 재시작이 예면 restart', () => {
     const a = ask();
     const reply = answer(a.id);
-    expect(classifyCodexReply({ comment: reply, comments: [a, reply], roles })).toEqual({
+    expect(
+      classifyCodexReply({ comment: reply, comments: [a, reply], roles, expectedIssue: 104 }),
+    ).toEqual({
       kind: 'restart',
       errors: [],
       replyTo: a.id,
@@ -410,36 +413,82 @@ describe('classifyCodexReply', () => {
 
   it('objection에 대한 답도 근거로 인정한다', () => {
     const o = objection();
-    expect(classifyCodexReply({ comment: answer(o.id), comments: [o], roles }).kind).toBe(
-      'restart',
-    );
+    expect(
+      classifyCodexReply({ comment: answer(o.id), comments: [o], roles, expectedIssue: 104 }).kind,
+    ).toBe('restart');
   });
 
   it('재시작이 아니오면 hold, need-user는 need-user', () => {
     const a = ask();
-    expect(classifyCodexReply({ comment: answer(a.id, '아니오'), comments: [a], roles }).kind).toBe(
-      'hold',
-    );
-    expect(classifyCodexReply({ comment: needUser(a.id), comments: [a], roles }).kind).toBe(
-      'need-user',
-    );
+    expect(
+      classifyCodexReply({
+        comment: answer(a.id, '아니오'),
+        comments: [a],
+        roles,
+        expectedIssue: 104,
+      }).kind,
+    ).toBe('hold');
+    expect(
+      classifyCodexReply({ comment: needUser(a.id), comments: [a], roles, expectedIssue: 104 })
+        .kind,
+    ).toBe('need-user');
   });
 
   it('reply-to가 이 스레드의 Claude 메시지가 아니면 invalid', () => {
     const a = ask();
-    const result = classifyCodexReply({ comment: answer(999_999), comments: [a], roles });
+    const result = classifyCodexReply({
+      comment: answer(999_999),
+      comments: [a],
+      roles,
+      expectedIssue: 104,
+    });
     expect(result.kind).toBe('invalid');
     expect(result.errors[0]).toContain('reply-to 999999');
+  });
+
+  it('answer나 Claude 메시지의 issue 값이 이 스레드의 이슈와 다르면 invalid', () => {
+    const a = ask();
+    const result = classifyCodexReply({
+      comment: answer(a.id),
+      comments: [a],
+      roles,
+      expectedIssue: 117,
+    });
+    expect(result.kind).toBe('invalid');
+    expect(result.errors[0]).toContain('#117');
+
+    // Claude 메시지는 맞고 answer만 다른 경우
+    const own = { ...ask(), body: ask().body.replace('issue=104', 'issue=117') };
+    const wrong = answer(own.id);
+    expect(
+      classifyCodexReply({ comment: wrong, comments: [own], roles, expectedIssue: 117 }).kind,
+    ).toBe('invalid');
+  });
+
+  it('기대 이슈 번호를 모르면 invalid', () => {
+    const a = ask();
+    expect(
+      classifyCodexReply({ comment: answer(a.id), comments: [a], roles, expectedIssue: null }).kind,
+    ).toBe('invalid');
   });
 
   it('형식이 틀린 답은 invalid, ai-msg가 아닌 댓글과 다른 계정은 other', () => {
     const a = ask();
     const broken = { id: 1, login: CODEX, body: '<!-- ai-msg:v1 type=answer issue= -->' };
-    expect(classifyCodexReply({ comment: broken, comments: [a], roles }).kind).toBe('invalid');
-    const plain = { id: 2, login: CODEX, body: '사용자가 할 일: ...' };
-    expect(classifyCodexReply({ comment: plain, comments: [a], roles }).kind).toBe('other');
     expect(
-      classifyCodexReply({ comment: answer(a.id, '예', 'someone'), comments: [a], roles }).kind,
+      classifyCodexReply({ comment: broken, comments: [a], roles, expectedIssue: 104 }).kind,
+    ).toBe('invalid');
+    const plain = { id: 2, login: CODEX, body: '사용자가 할 일: ...' };
+    expect(
+      classifyCodexReply({ comment: plain, comments: [a], roles, expectedIssue: 104 }).kind,
+    ).toBe('other');
+    expect(
+      classifyCodexReply({
+        comment: answer(a.id, '예', 'someone'),
+        comments: [a],
+        roles,
+        expectedIssue: 104,
+      }).kind,
     ).toBe('other');
   });
 });
@@ -457,6 +506,7 @@ describe('decidePing와 Codex 답', () => {
       maintainer: ME,
       pingBot: PING_BOT,
       roles,
+      expectedIssue: 104,
     });
     expect(d.ping).toBeNull();
   });
@@ -475,6 +525,7 @@ describe('decidePing와 Codex 답', () => {
         maintainer: ME,
         pingBot: PING_BOT,
         roles,
+        expectedIssue: 104,
       });
       expect(d.ping).toBe('codex');
     }
@@ -483,5 +534,13 @@ describe('decidePing와 Codex 답', () => {
   it('리뷰 응답 댓글은 Codex 답으로 보지 않는다', () => {
     const receipt = { login: CODEX, body: '<!-- codex-review-receipt:v1 -->', createdAt: at(2) };
     expect(decide([relay(), receipt]).ping).toBeNull();
+  });
+});
+
+describe('expectedIssueOf', () => {
+  it('이슈는 그 번호, PR은 브랜치 이름의 이슈 번호', () => {
+    expect(expectedIssueOf({ number: 104 })).toBe(104);
+    expect(expectedIssueOf({ number: 111, headRef: 'feat/104-hide-completed' })).toBe(104);
+    expect(expectedIssueOf({ number: 111, headRef: 'chore/ai-stop-relay' })).toBeNull();
   });
 });

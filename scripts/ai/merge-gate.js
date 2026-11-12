@@ -1,18 +1,41 @@
 // 머지 게이트(commit status `ai-gate`)의 상태를 정한다. develop ruleset이 이 상태를 필수 검사로 요구한다.
 // GitHub API 호출은 merge-gate 워크플로가 하고, 이 파일은 모은 자료로 판단만 한다. tests/merge-gate.test.ts가 검사한다.
 import { parseCodexState, summarizeChecks } from './review-decision.js';
+import { parseMessage } from './ai-msg.js';
 
 export const GATE_CONTEXT = 'ai-gate';
 
 /** Codex 지적 중 머지를 막는 등급. P2 이하는 막지 않는다(AGENTS.md "Review guidelines"). */
 const BLOCKING_BADGE = /!\[P[01] Badge\]/;
+/** 작업 결과 댓글 형태의 리뷰에서 지적 등급 표시. 예: `**[P1] 제목**` */
+const BLOCKING_TAG = /\[P[01]\]/g;
 
 /**
- * Codex가 현재 head를 검토했는지 본다. 요약 댓글의 상태 표시, 리뷰 객체, `@codex review` 응답 중 하나면 된다.
+ * Codex가 리뷰를 GitHub 리뷰가 아닌 작업 결과 댓글로 남긴 경우(`View task →` 링크가 있는 일반 댓글).
+ * 현재 head의 파일 링크(`/blob/<head>/`)가 있어야 현재 커밋을 본 것으로 인정한다.
+ * ai-msg 메시지, 요약 상태 댓글, 리뷰 응답 댓글은 제외한다.
+ */
+function taskReviews({ head, comments, codexBot }) {
+  return comments.filter(
+    (c) =>
+      c.login === codexBot &&
+      c.body.includes('View task') &&
+      c.body.includes(`/blob/${head}/`) &&
+      !c.body.includes('codex-review-state') &&
+      !c.body.includes('codex-review-receipt') &&
+      !/<!--\s*ai-msg/i.test(c.body) &&
+      parseMessage(c.body) === null,
+  );
+}
+
+/**
+ * Codex가 현재 head를 검토했는지 본다. 요약 댓글의 상태 표시, 리뷰 객체, `@codex review` 응답,
+ * 현재 head를 가리키는 작업 결과 댓글 중 하나면 된다.
  */
 function reviewedHead({ head, comments, reviews, codexBot }) {
   const short = head.slice(0, 10);
   return (
+    taskReviews({ head, comments, codexBot }).length > 0 ||
     reviews.some((r) => r.login === codexBot && r.commitId === head) ||
     comments.some((c) => {
       if (c.login !== codexBot) return false;
@@ -45,9 +68,14 @@ export function decideGate(input) {
   if (ci === 'failure') return { state: 'failure', description: 'CI check 실패' };
 
   // 현재 head에서 처음 단 지적만 센다. 이전 커밋의 지적은 GitHub가 새 커밋 위치로 옮겨 보여 줄 뿐이다.
-  const blocking = input.inlineComments.filter(
-    (c) => c.login === codexBot && c.originalCommitId === head && BLOCKING_BADGE.test(c.body),
-  ).length;
+  const blocking =
+    input.inlineComments.filter(
+      (c) => c.login === codexBot && c.originalCommitId === head && BLOCKING_BADGE.test(c.body),
+    ).length +
+    taskReviews({ head, comments: input.comments, codexBot }).reduce(
+      (n, c) => n + (c.body.match(BLOCKING_TAG)?.length ?? 0),
+      0,
+    );
   if (blocking > 0) {
     return { state: 'failure', description: `Codex P0/P1 지적 ${blocking}건이 현재 커밋에 있음` };
   }

@@ -123,7 +123,7 @@ jobs:
         with:
           script: |
             const { decideReview, decideAnswerRestart } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/review-decision.js`);
-            const { classifyCodexReply, rolesOf } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/relay.js`);
+            const { classifyCodexReply, expectedIssueOf, rolesOf } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/relay.js`);
             const p = context.payload;
             const dispatched = context.eventName === 'workflow_dispatch';
             const number = dispatched ? Number(p.inputs.pr)
@@ -152,7 +152,9 @@ jobs:
               const answerId = Number(p.inputs.answer);
               const answer = thread.find((c) => c.id === answerId);
               const roles = rolesOf({ codexBot: process.env.CODEX_BOT, maintainer: process.env.MAINTAINER });
-              const reply = answer ? classifyCodexReply({ comment: answer, comments: thread, roles }) : { kind: 'missing', errors: [] };
+              // PR 스레드의 ask와 answer는 PR이 닫는 이슈 번호를 issue 값으로 쓴다.
+              const expectedIssue = expectedIssueOf({ number, headRef: pr.head.ref });
+              const reply = answer ? classifyCodexReply({ comment: answer, comments: thread, roles, expectedIssue }) : { kind: 'missing', errors: [] };
               d = reply.kind === 'restart'
                 ? decideAnswerRestart({ labels, open: pr.state === 'open', sameRepo, answerId })
                 : { action: 'none', reason: `answer ${answerId} is not a restart (${reply.kind})`, addLabels: [], removeLabels: [] };

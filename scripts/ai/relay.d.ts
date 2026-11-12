@@ -29,10 +29,19 @@ export function decideRelayTarget(input: { comments: ThreadComment[]; roles: Rol
   reason: string;
 };
 
+export function expectedIssueOf(input: { number: number; headRef?: string | null }): number | null;
+
+export function resolveExpectedIssue(input: {
+  github: unknown;
+  repo: { owner: string; repo: string };
+  number: number;
+}): Promise<number | null>;
+
 export function classifyCodexReply(input: {
   comment: ThreadComment;
   comments: ThreadComment[];
   roles: Roles;
+  expectedIssue: number | null | undefined;
 }): {
   kind: 'restart' | 'hold' | 'need-user' | 'invalid' | 'other';
   errors: string[];
@@ -46,6 +55,7 @@ export interface PingInput {
   maintainer: string;
   pingBot: string;
   roles?: Roles;
+  expectedIssue?: number | null;
 }
 
 export function decidePing(input: PingInput): { ping: null | 'codex' | 'timeout'; key?: string };
