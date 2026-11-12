@@ -21,5 +21,10 @@ export default tseslint.config(
     files: ['**/*.js'],
     extends: [tseslint.configs.disableTypeChecked],
   },
+  {
+    // scripts/는 Node에서 실행한다.
+    files: ['scripts/**/*.js'],
+    languageOptions: { globals: { ...globals.node } },
+  },
   prettier,
 );
