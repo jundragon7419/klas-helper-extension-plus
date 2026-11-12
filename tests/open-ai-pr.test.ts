@@ -25,6 +25,12 @@ describe.skipIf(!hasBash)('open-ai-pr.sh', () => {
 
   const git = (...args: string[]) => execFileSync('git', args, { cwd: work, stdio: 'pipe' });
 
+  // 워크플로는 구현 작업이 넘긴 브랜치와 커밋을 BRANCH, HEAD_SHA로 준다. 기본값은 현재 작업 공간의 HEAD다.
+  const head = () => ({
+    BRANCH: git('rev-parse', '--abbrev-ref', 'HEAD').toString().trim(),
+    HEAD_SHA: git('rev-parse', 'HEAD').toString().trim(),
+  });
+
   const run = (env: Record<string, string>) =>
     spawnSync('bash', [script], {
       cwd: work,
@@ -36,6 +42,7 @@ describe.skipIf(!hasBash)('open-ai-pr.sh', () => {
         ISSUE: '92',
         GH_TOKEN: 'maintainer-token',
         ACTIONS_TOKEN: 'actions-token',
+        ...head(),
         ...env,
       },
     });
@@ -89,6 +96,23 @@ describe.skipIf(!hasBash)('open-ai-pr.sh', () => {
     expect(log).toContain('[maintainer-token] pr edit 95 --body-file .ai-pr/body.md');
     expect(log).toContain('[actions-token] issue comment 92');
     expect(readFileSync(join(work, '.ai-pr', 'body.md'), 'utf8')).toContain('Remove hover (#95)');
+  });
+
+  it('작업 공간의 HEAD가 아니라 넘겨받은 브랜치와 커밋으로 PR을 연다', () => {
+    const pushed = head();
+    git('switch', '-q', 'develop');
+
+    const result = run(pushed);
+
+    expect(result.status).toBe(0);
+    expect(readCalls()).toContain('--head fix/92-remove-hover');
+  });
+
+  it('넘겨받은 커밋이 원격 브랜치의 커밋과 다르면 PR을 열지 않는다', () => {
+    const result = run({ HEAD_SHA: 'f'.repeat(40) });
+
+    expect(result.status).not.toBe(0);
+    expect(readCalls()).toBe('');
   });
 
   it('secret이 없으면 PR을 열지 않는다', () => {

@@ -18,12 +18,25 @@
    - Codex 요약 댓글의 상태 표시(`codex-review-state`)가 현재 커밋의 검토 완료를 가리키고, 그 커밋에 Codex 지적이 없고, CI `check`가 성공하면 `ai:ready`로 바꾸고 사용자를 호출한다. 그 뒤에 지적이 도착하면 `ai:in-progress`로 되돌리고 고친다.
 6. 사용자가 PR과 "KLAS에서 직접 확인할 항목"을 확인하고 PR 본문의 Squash 커밋 메시지로 머지한다.
 
-다음 경우에는 `ai:needs-human` 라벨을 붙이고 멈춘다. 사용자가 판단한 뒤 라벨을 지우면 다음 Codex 리뷰나 CI 결과부터 다시 판단한다.
+### 멈췄을 때
 
+다음 경우에는 `ai:needs-human` 라벨을 붙이고 멈춘다.
+
+- 구현 중 권한 추가, 공통 모듈 재작성, 실제 데이터, `.github/workflows/` 수정, 저장소 밖(KLAS 화면 등)의 확인이 필요하다고 판단함. PR 없이 이슈에서 멈춘다.
+- 구현 단계나 검토 반영 단계가 실패함
 - 수정 3회 뒤에도 지적이 남음
 - Claude가 지적에 동의하지 않아 코드를 바꾸지 않음
 - 마지막 커밋 뒤 3시간 동안 Codex 리뷰가 없음
-- 구현 중 권한 추가, 공통 모듈 재작성, 실제 데이터, `.github/workflows/` 수정이 필요하다고 판단함 (이 경우 PR 대신 이슈 댓글로 멈춘다)
+
+멈추면 사용자에게 말하는 쪽은 Codex 하나다.
+
+1. Claude는 멈춘 원인과 근거를 "멈춤 보고"로 남긴다(`AGENTS.md` 형식). 사용자에게 직접 요청하지 않는다.
+2. 워크플로가 사용자 계정(`MAINTAINER_PR_TOKEN`)으로 `@codex` 정리 요청을 단다. 표시는 `<!-- ai-relay:... -->`다.
+3. Codex가 멈춤 보고를 읽고 저장소로 답할 수 있으면 답하고, 아니면 사용자가 할 일을 정리한다(`AGENTS.md` "멈춤 정리").
+4. `AI relay` 워크플로가 Codex 정리 댓글을 보면 사용자를 멘션해 알린다. 30분 안에 정리가 없으면 그대로 알린다.
+5. 사용자가 필요한 정보를 주면 Codex가 이슈에 정리해 올린다. 이슈는 `@claude` 댓글로 다시 시작하고(라벨은 자동으로 지워진다), PR은 사용자가 `ai:needs-human` 라벨을 지우면 다음 Codex 리뷰나 CI 결과부터 다시 판단한다.
+
+Codex 리뷰가 오지 않는 경우(3시간 무응답)는 Codex에게 요청하지 않고 바로 사용자에게 알린다.
 
 | 라벨 | 뜻 |
 |---|---|
@@ -40,7 +53,9 @@
 - 같은 이슈에 열린 PR이 있으면 새 구현을 시작하지 않는다.
 - 머지는 사용자만 한다.
 - 자동 흐름의 Claude는 `.github/workflows/` 파일을 push할 수 없다(GitHub App에 workflows 권한을 주지 않는다). 워크플로 변경은 수동 방식으로 한다.
-- `MAINTAINER_PR_TOKEN`은 이 저장소만 대상으로 한 fine-grained token이다. 권한은 Pull requests, Issues 읽기/쓰기와 Contents 읽기뿐이라 push와 머지는 할 수 없다. 이 토큰은 PR을 여는 단계에서만 쓰고 Claude 단계에는 넘기지 않는다.
+- `MAINTAINER_PR_TOKEN`은 이 저장소만 대상으로 한 fine-grained token이다. 권한은 Pull requests, Issues 읽기/쓰기와 Contents 읽기뿐이라 push와 머지는 할 수 없다. 이 토큰은 PR 열기와 Codex 정리 요청에만 쓴다.
+- 이 토큰을 쓰는 작업과 판단 코드(`scripts/ai/`)는 Claude가 건드린 작업 공간이나 PR 브랜치가 아니라, 기본 브랜치를 새로 체크아웃한 작업에서 실행한다. 이슈나 PR 내용에 심어진 지시로 Claude가 파일을 바꿔도 토큰에 닿지 못하게 하기 위함이다.
+- 공개 저장소라 누구나 댓글을 달 수 있다. 판단에 쓰는 표시(`ai-handled`, `codex-review-state`, `ai-relay`, `ai-pinged`)는 정해진 계정이 단 댓글만 인정한다.
 
 ## 작업 시작
 
