@@ -102,15 +102,20 @@ VS Code를 쓰면 저장소를 열 때 ESLint와 Prettier 확장 설치를 권�
 | `develop` | 개발 브랜치입니다. 모든 PR은 여기로 보냅니다. |
 | 작업 브랜치 | `develop`에서 만들고, 합친 뒤 지웁니다. |
 
-작업 브랜치 이름은 `<종류>/<이슈 번호>-<짧은 설명>` 형식입니다.
+작업 브랜치 이름은 `<종류>/<이슈 번호>-<짧은 설명>` 형식입니다. 모든 작업은 이슈에서 시작하므로 이슈 번호를 빠뜨리지 않습니다. 짧은 설명은 영어 소문자, 숫자, 하이픈으로 씁니다.
 
-| 종류 | 쓰는 경우 | 예 |
+종류는 이슈의 "종류" 항목에 맞춰 고릅니다.
+
+| 종류 | 이슈 종류 | 예 |
 |---|---|---|
-| `feat/` | 새 기능 | `feat/10-deadline-badge` |
+| `feat/` | 기능 | `feat/10-deadline-badge` |
 | `fix/` | 버그 수정 | `fix/23-session-detect` |
-| `refactor/` | 동작은 그대로 두고 코드 정리 | `refactor/31-api-client` |
-| `docs/` | 문서 | `docs/4-architecture-update` |
+| `refactor/` | 리팩터링 | `refactor/31-api-client` |
+| `test/` | 테스트 | `test/119-dom-fixtures` |
+| `docs/` | 문서, 조사 | `docs/4-architecture-update` |
 | `chore/` | 설정, 도구, CI | `chore/1-develop-branch` |
+
+PR 본문에는 브랜치의 이슈 번호와 같은 `Closes #이슈 번호`를 적습니다. CI의 `check` 작업이 브랜치 이름과 이 줄을 검사하고(`scripts/ci/check-branch.js`), 어긋나면 실패합니다. `develop`을 `main`으로 합치는 배포 PR은 검사하지 않습니다.
 
 PR은 메인테이너가 "Squash and merge"로 합칩니다. PR 제목이 `develop`에 남는 커밋 메시지가 되므로, PR 제목도 [커밋 메시지](#커밋-메시지) 규칙을 따라 주세요.
 
