@@ -183,6 +183,18 @@ describe('watchCompletedLectureFilter', () => {
     expect(status()).toBe('');
   });
 
+  it('종료하면 예약된 렌더링도 취소해 버튼을 다시 만들지 않는다', async () => {
+    load(
+      '<select name="selectSubj"><option>A</option></select>' +
+        desktop(week(1, [video('가', done), video('나', todo)])),
+    );
+    doc.querySelector('select')!.dispatchEvent(new win.window.Event('change', { bubbles: true }));
+    stop?.();
+    stop = undefined;
+    await settle();
+    expect(doc.querySelectorAll('[data-khp-lecture-filter]')).toHaveLength(0);
+  });
+
   it('목록이 없으면 버튼을 만들지 않고 빈 목록도 처리한다', async () => {
     load(
       '<div class="tablelistbox"><table><tbody><tr><td colspan="8">등록된 온라인강의가 없습니다.</td></tr></tbody></table></div>',

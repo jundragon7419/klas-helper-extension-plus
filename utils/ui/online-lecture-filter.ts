@@ -154,12 +154,11 @@ export function watchCompletedLectureFilter(root: Document): () => void {
     if (status && status.textContent !== text) status.textContent = text;
   };
 
-  let scheduled = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   const schedule = () => {
-    if (scheduled) return;
-    scheduled = true;
-    setTimeout(() => {
-      scheduled = false;
+    if (timer !== null) return;
+    timer = setTimeout(() => {
+      timer = null;
       render();
     }, 0);
   };
@@ -187,6 +186,8 @@ export function watchCompletedLectureFilter(root: Document): () => void {
   });
   return () => {
     observer.disconnect();
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
     root.removeEventListener('change', onChange, true);
     hide = false;
     render();
