@@ -169,6 +169,10 @@ jobs:
         continue-on-error: true
         run: npm ci 2>&1 | tee .npm-ci.log
 
+      - name: Playwright Chromium 설치
+        continue-on-error: true
+        run: npx playwright install --with-deps chromium
+
       # Claude에게 GitHub API 쓰기 권한을 주지 않도록 검토 자료를 미리 파일로 모은다.
       - name: 검토 자료 모으기
         env:
@@ -216,7 +220,7 @@ jobs:
                push가 없으면 Codex가 다시 검토하지 않으므로, 다음 단계가 Codex에게 이견 검토와 정리를 맡긴다. 사용자에게 직접 요청하지 않는다.
           claude_args: |
             --max-turns 60
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit -m:*),Bash(git push origin HEAD:${{ needs.evaluate.outputs.branch }}),Bash(npm run lint),Bash(npm run format),Bash(npm run format:check),Bash(npm install),Bash(npm run typecheck),Bash(npm test:*),Bash(npm run build),Bash(npm run build:firefox),Bash(gh pr comment ${{ needs.evaluate.outputs.pr }} --body-file:*),Bash(gh pr edit ${{ needs.evaluate.outputs.pr }} --add-label ai:needs-human)"
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit -m:*),Bash(git push origin HEAD:${{ needs.evaluate.outputs.branch }}),Bash(npm run lint),Bash(npm run format),Bash(npm run format:check),Bash(npm install),Bash(npm run typecheck),Bash(npm test:*),Bash(npm run build),Bash(npm run build:firefox),Bash(npm run check:build),Bash(npm run lint:firefox),Bash(npm run test:e2e),Bash(gh pr comment ${{ needs.evaluate.outputs.pr }} --body-file:*),Bash(gh pr edit ${{ needs.evaluate.outputs.pr }} --add-label ai:needs-human)"
 
   # 자동 흐름이 멈추면 Codex에게 정리를 맡긴다. 메인테이너 알림은 ai-relay 워크플로가 보낸다.
   # 메인테이너 토큰이 PR 브랜치 파일에 닿지 않도록 기본 브랜치를 새로 체크아웃해 실행한다.

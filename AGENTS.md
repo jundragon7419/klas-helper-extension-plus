@@ -15,7 +15,12 @@ npm run typecheck
 npm test
 npm run build
 npm run build:firefox
+npm run check:build
+npm run lint:firefox
+npm run test:e2e
 ```
+
+`npm run test:e2e`는 Playwright Chromium이 필요하다(`npx playwright install chromium`). `npm run check:build`가 권한 스냅샷 차이로 실패하면, 의도한 권한 변경일 때만 `scripts/ci/manifest-access.json`을 고치고 PR에 이유를 적는다.
 
 ## 커밋과 PR
 

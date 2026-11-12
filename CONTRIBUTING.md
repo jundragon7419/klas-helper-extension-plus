@@ -16,6 +16,14 @@ npm install
 
 설치가 끝나면 `wxt prepare`가 자동으로 실행되어 `.wxt/` 폴더에 타입 정보가 만들어집니다. 이 폴더는 저장소에 올리지 않습니다.
 
+E2E 테스트(`npm run test:e2e`)를 돌리려면 Playwright용 Chromium을 한 번 내려받습니다.
+
+```shell
+npx playwright install chromium
+```
+
+E2E는 Chromium 기반 브라우저(Chrome, Edge)만 대상으로 합니다. Chrome과 Edge는 확장을 명령줄로 올리는 옵션을 막아 두어서, Playwright가 내려받는 Chromium이 둘을 대표합니다. Firefox는 빌드 산출물 검사와 `npm run lint:firefox`만 자동으로 하고, 동작은 배포 전에 직접 확인합니다.
+
 ### 개발 서버
 
 ```shell
@@ -65,6 +73,9 @@ KLAS 로그인 상태는 프로필을 유지해도 남지 않습니다. KLAS 로
 | `npm run format:check` | 코드 형식 검사 (고치지 않음) |
 | `npm test` | 테스트 한 번 실행 |
 | `npm run test:watch` | 파일이 바뀔 때마다 테스트 다시 실행 |
+| `npm run check:build` | 빌드한 manifest 검사 (참조 파일, background, 권한 스냅샷 `scripts/ci/manifest-access.json`) |
+| `npm run lint:firefox` | Firefox 빌드를 `web-ext lint`로 검사 |
+| `npm run test:e2e` | 빌드한 확장을 Chromium에 올려 보는 E2E 테스트 (`e2e/`) |
 | `npm run fixtures:snippet` | KLAS 응답 수집 스크립트 만들기 (`local-data/klas-fixture-snippet.js`) |
 
 ### PR을 열기 전에
@@ -78,7 +89,12 @@ npm test
 npm run typecheck
 npm run build
 npm run build:firefox
+npm run check:build
+npm run lint:firefox
+npm run test:e2e
 ```
+
+`check:build`, `lint:firefox`, `test:e2e`는 빌드 결과를 검사하므로 두 빌드 뒤에 실행합니다. `check:build`가 권한 스냅샷 차이로 실패하면, 의도한 권한 변경일 때만 `scripts/ci/manifest-access.json`을 고치고 PR의 "추가한 권한과 이유"에 적습니다.
 
 형식 검사가 실패하면 `npm run format`으로 고친 뒤 다시 커밋하면 됩니다. Prettier는 코드와 설정 파일에만 적용하고 마크다운 문서에는 적용하지 않습니다.
 
