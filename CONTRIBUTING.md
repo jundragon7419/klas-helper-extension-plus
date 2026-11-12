@@ -107,6 +107,7 @@ VS Code를 쓰면 저장소를 열 때 ESLint와 Prettier 확장 설치를 권�
 3. PR은 `develop`으로 보냅니다. PR 하나에는 기능 하나 또는 수정 하나만 담습니다.
 4. PR을 열기 전에 [PR을 열기 전에](#pr을-열기-전에)의 명령을 모두 통과시킵니다.
 5. Chrome 계열 브라우저(Chrome, Edge)에서 확장을 직접 로드해서 동작을 확인하고, 화면이 바뀌었다면 스크린샷을 PR에 붙입니다.
+6. CI `check`와 머지 게이트 `ai-gate`가 모두 통과해야 머지됩니다. `ai-gate`는 현재 커밋을 Codex가 검토했고 P0/P1 지적이 없을 때 통과합니다. PR을 연 뒤 커밋을 더 올렸다면 PR에 `@codex review`를 달아 다시 검토를 받습니다. 자세한 기준은 [Claude와 Codex 협업 규칙의 머지 게이트](docs/AI-COLLABORATION.md#머지-게이트)에 있습니다.
 
 `main`과 `develop`에 직접 push하지 않습니다.
 

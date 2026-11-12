@@ -10,6 +10,7 @@ export interface CodexReviewState {
 export function parseCodexState(body: string | null | undefined): CodexReviewState | null;
 
 export interface CheckRun {
+  id?: number;
   status: string;
   conclusion: string | null;
 }

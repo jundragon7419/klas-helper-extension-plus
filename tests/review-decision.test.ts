@@ -60,6 +60,16 @@ describe('summarizeChecks', () => {
     expect(summarizeChecks(ok)).toBe('success');
     expect(summarizeChecks([{ status: 'completed', conclusion: 'failure' }])).toBe('failure');
   });
+
+  it('같은 커밋에 run이 여럿이면 가장 최근(id가 큰) run만 본다', () => {
+    const cancelled = { id: 1, status: 'completed', conclusion: 'cancelled' };
+    const passed = { id: 2, status: 'completed', conclusion: 'success' };
+    expect(summarizeChecks([cancelled, passed])).toBe('success');
+    expect(summarizeChecks([passed, cancelled])).toBe('success');
+    expect(summarizeChecks([passed, { id: 3, status: 'in_progress', conclusion: null }])).toBe(
+      'pending',
+    );
+  });
 });
 
 describe('decideReview', () => {
