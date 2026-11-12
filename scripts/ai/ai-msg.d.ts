@@ -23,6 +23,7 @@ export interface MessageSpec {
   mention?: string;
   header: string[];
   fields: string[];
+  values?: Record<string, string[]>;
 }
 
 export const MESSAGE_TYPES: Record<MessageType, MessageSpec>;

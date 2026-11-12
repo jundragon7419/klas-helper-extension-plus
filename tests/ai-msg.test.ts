@@ -17,8 +17,13 @@ const ME = 'jundragon7419';
 const roles = { codex: [CODEX], claude: [CLAUDE], maintainer: [ME] };
 const HEAD = 'a'.repeat(40);
 
-const fill = (type: MessageType) =>
-  Object.fromEntries(MESSAGE_TYPES[type].fields.map((name) => [name, `${name} 내용`]));
+// 값이 정해진 절(answer의 재시작)은 허용된 첫 값을 쓴다.
+const fill = (type: MessageType) => {
+  const spec = MESSAGE_TYPES[type];
+  return Object.fromEntries(
+    spec.fields.map((name) => [name, spec.values?.[name]?.[0] ?? `${name} 내용`]),
+  );
+};
 const meta = { issue: 104, pr: 111, head: HEAD, rev: 1, 'reply-to': 9001 };
 const sender = (type: MessageType) =>
   ({ codex: CODEX, claude: CLAUDE, maintainer: ME })[MESSAGE_TYPES[type].from[0]!];
@@ -88,6 +93,29 @@ describe('formatMessage와 parseMessage', () => {
     const tilde = body.replace(/```md/, '~~~').replace(/```\n- 끝/, '~~~\n- 끝');
     expect(parseMessage(tilde)!.fields['단계']).toBe('구현 전');
   });
+
+  it.each([
+    ['긴 경계 안의 짧은 경계', '````md\n```\n### 단계\n```\n````'],
+    ['백틱 경계 안의 물결 경계', '```\n### 단계\n~~~\n### 단계\n```'],
+    ['물결 경계 안의 백틱 경계', '~~~\n```\n### 단계\n```\n### 단계\n~~~'],
+    ['들여쓴 경계', '- 예시\n   ```\n### 단계\n   ```'],
+  ])('%s도 코드 블록으로 본다', (_, question) => {
+    const body = formatMessage(
+      { type: 'ask', issue: 1 },
+      { 단계: '구현 전', 질문: question, '확인한 것': 'x' },
+    );
+    const message = parseMessage(body)!;
+    expect(message.fields).toEqual({ 단계: '구현 전', 질문: question, '확인한 것': 'x' });
+    expect(message.duplicates).toEqual([]);
+  });
+
+  it('닫히지 않은 코드 블록은 끝까지 코드로 본다', () => {
+    const body = formatMessage(
+      { type: 'ask', issue: 1 },
+      { 단계: '구현 전', 질문: '```\n### 확인한 것', '확인한 것': 'x' },
+    );
+    expect(parseMessage(body)!.fields['질문']).toBe('```\n### 확인한 것\n\n### 확인한 것\n\nx');
+  });
 });
 
 describe('validateMessage', () => {
@@ -111,6 +139,10 @@ describe('validateMessage', () => {
       '멘션 다음 줄의 잘못된 표시 줄',
       '@claude\n<!-- ai-msg:v1 type=start issue=1 rev=0 reply-to= -->',
     ],
+    ['여는 표시 뒤 공백 없음', '<!--ai-msg:v1 type=ask issue=1 -->'],
+    ['여는 표시 뒤 공백 두 칸', '<!--  ai-msg:v1 type=ask issue=1 -->'],
+    ['대문자', '<!-- AI-MSG:v1 type=ask issue=1 -->'],
+    ['멘션 다음 줄의 공백 없는 표시 줄', '@claude\n<!--ai-msg:v1 type=start -->'],
   ])('표시 줄 문법이 틀리면(%s) 오류로 알린다', (_, body) => {
     const result = check(CLAUDE, body);
     expect(result.message).toBeNull();
@@ -121,7 +153,11 @@ describe('validateMessage', () => {
   it('표시 줄이 셋째 줄 이후에 있으면 오류로 알리고, 코드 블록 안이면 무시한다', () => {
     const header = formatHeader({ type: 'ask', issue: 1 });
     expect(check(CLAUDE, `안녕하세요\n\n${header}`).errors).toEqual([
-      '표시 줄은 첫 줄, 또는 호출 멘션 바로 다음 줄에 있어야 합니다.',
+      '표시 줄은 첫 줄, 또는 멘션만 있는 첫 줄 바로 다음 줄에 있어야 합니다.',
+    ]);
+    // 멘션 줄에 다른 글이 있으면 멘션 줄로 보지 않는다.
+    expect(check(ME, `@claude 시작해\n${formatHeader({ type: 'start' })}`).errors).toEqual([
+      '표시 줄은 첫 줄, 또는 멘션만 있는 첫 줄 바로 다음 줄에 있어야 합니다.',
     ]);
     const fence = '`'.repeat(3);
     expect(check(CLAUDE, `예시입니다.\n\n${fence}text\n${header}\n${fence}`)).toEqual({
@@ -154,6 +190,20 @@ describe('validateMessage', () => {
   it('같은 절이 두 번 있으면 실패한다', () => {
     const body = formatMessage({ type: 'ask', issue: 104 }, fill('ask')) + '\n### 질문\n\n또\n';
     expect(check(CLAUDE, body).errors).toContain('본문 절 "### 질문"이 두 번 있습니다.');
+  });
+
+  it('answer의 재시작은 예 또는 아니오만 받는다', () => {
+    for (const value of ['예', '아니오']) {
+      const ok = formatMessage({ type: 'answer', ...meta }, { ...fill('answer'), 재시작: value });
+      expect(check(CODEX, ok).errors).toEqual([]);
+    }
+    const body = formatMessage(
+      { type: 'answer', ...meta },
+      { ...fill('answer'), 재시작: '아마도' },
+    );
+    expect(check(CODEX, body).errors).toEqual([
+      '본문 절 "### 재시작"의 값은 예 또는 아니오이어야 합니다: 아마도',
+    ]);
   });
 
   it('필요한 표시 값이 없으면 실패한다', () => {

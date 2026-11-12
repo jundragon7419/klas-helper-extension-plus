@@ -47,6 +47,8 @@ export const MESSAGE_TYPES = {
     to: 'claude',
     header: ['issue', 'reply-to'],
     fields: ['답', '근거', '재시작'],
+    // 워크플로가 이 값으로 Claude를 다시 부를지 정한다.
+    values: { 재시작: ['예', '아니오'] },
   },
   'need-user': {
     from: ['codex'],
@@ -90,9 +92,36 @@ const VALUE_RE = {
   rev: /^\d+$/,
   'reply-to': /^[1-9]\d*$/,
 };
-const MENTION_RE = /^@(claude|codex)\b/;
-const HEADER_START = '<!-- ai-msg:';
-const FENCE_RE = /^\s*(```|~~~)/;
+// 호출 멘션 줄은 멘션 하나만 있어야 한다.
+const MENTION_RE = /^@(claude|codex)$/;
+// 표시 줄을 쓰려 한 줄. 공백이나 대소문자가 틀려도 메시지로 보고 문법 오류를 알린다.
+const HEADER_CANDIDATE_RE = /^<!--\s*ai-msg\b/i;
+// 코드 블록 경계(CommonMark fenced code). 들여쓰기 3칸까지, 같은 문자로 같거나 더 길게 닫는다.
+const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+
+/**
+ * 줄마다 코드 블록 안인지 판단한다. 경계 줄 자체도 코드 블록으로 본다.
+ * @returns {boolean[]}
+ */
+function fencedLines(lines) {
+  let open = null;
+  return lines.map((line) => {
+    const match = FENCE_RE.exec(line);
+    if (open) {
+      const [, fence, rest] = match ?? [];
+      if (fence && fence[0] === open[0] && fence.length >= open.length && rest.trim() === '') {
+        open = null;
+      }
+      return true;
+    }
+    // 백틱 경계는 정보 문자열에 백틱을 쓸 수 없다.
+    if (match && !(match[1][0] === '`' && match[2].includes('`'))) {
+      open = match[1];
+      return true;
+    }
+    return false;
+  });
+}
 
 /** 실제로 정의된 종류만 찾는다. `constructor` 같은 상속 속성은 종류가 아니다. */
 const specOf = (type) => (Object.hasOwn(MESSAGE_TYPES, type) ? MESSAGE_TYPES[type] : undefined);
@@ -127,27 +156,24 @@ function locateHeader(lines) {
   const second = (lines[1] ?? '').trim();
   let index = 0;
   let mention = null;
-  if (MENTION_RE.test(first) && second.startsWith(HEADER_START)) {
-    mention = first.split(/\s/)[0];
+  if (MENTION_RE.test(first) && HEADER_CANDIDATE_RE.test(second)) {
+    mention = first;
     index = 1;
   }
   const line = (lines[index] ?? '').trim();
-  if (line.startsWith(HEADER_START)) {
+  if (HEADER_CANDIDATE_RE.test(line)) {
     const header = HEADER_RE.exec(line);
     return header
       ? { status: 'ok', index, mention, header }
       : { status: 'malformed', reason: `표시 줄 문법이 다릅니다: ${line}` };
   }
-  // 코드 블록 밖의 셋째 줄 이후에 표시 줄이 있으면 위치가 틀린 메시지다.
-  let fenced = false;
-  for (const raw of lines) {
-    if (FENCE_RE.test(raw)) fenced = !fenced;
-    else if (!fenced && raw.trim().startsWith(HEADER_START)) {
-      return {
-        status: 'malformed',
-        reason: '표시 줄은 첫 줄, 또는 호출 멘션 바로 다음 줄에 있어야 합니다.',
-      };
-    }
+  // 코드 블록 밖의 다른 줄에 표시 줄이 있으면 위치가 틀린 메시지다.
+  const fenced = fencedLines(lines);
+  if (lines.some((raw, i) => !fenced[i] && HEADER_CANDIDATE_RE.test(raw.trim()))) {
+    return {
+      status: 'malformed',
+      reason: '표시 줄은 첫 줄, 또는 멘션만 있는 첫 줄 바로 다음 줄에 있어야 합니다.',
+    };
   }
   return { status: 'none' };
 }
@@ -156,7 +182,7 @@ const splitLines = (body) => (body ?? '').replace(/\r\n/g, '\n').split('\n');
 
 /**
  * 댓글 본문에서 메시지를 읽는다. 메시지가 아니거나 표시 줄이 틀리면 null.
- * 코드 블록(``` 또는 ~~~) 안의 `### ` 줄은 절 제목으로 보지 않는다.
+ * 코드 블록(``` 또는 ~~~, 더 긴 경계 포함) 안의 `### ` 줄은 절 제목으로 보지 않는다.
  * @returns {null | {version: string, mention: string | null, meta: Record<string, string>, fields: Record<string, string>, duplicates: string[]}}
  */
 export function parseMessage(body) {
@@ -174,10 +200,10 @@ export function parseMessage(body) {
   const fields = {};
   const duplicates = [];
   let current = null;
-  let fenced = false;
-  for (const line of lines.slice(index + 1)) {
-    const heading = fenced ? null : /^### (.+?)\s*$/.exec(line);
-    if (FENCE_RE.test(line)) fenced = !fenced;
+  const rest = lines.slice(index + 1);
+  const fenced = fencedLines(rest);
+  for (const [i, line] of rest.entries()) {
+    const heading = fenced[i] ? null : /^### (.+?)\s*$/.exec(line);
     if (heading) {
       current = heading[1];
       if (Object.hasOwn(fields, current)) duplicates.push(current);
@@ -242,6 +268,12 @@ export function validateMessage(comment, roles) {
 
   for (const name of spec.fields) {
     if (!message.fields[name]) errors.push(`본문 절 "### ${name}"이 없거나 비어 있습니다.`);
+  }
+  for (const [name, allowed] of Object.entries(spec.values ?? {})) {
+    const value = message.fields[name];
+    if (value && !allowed.includes(value)) {
+      errors.push(`본문 절 "### ${name}"의 값은 ${allowed.join(' 또는 ')}이어야 합니다: ${value}`);
+    }
   }
   for (const name of message.duplicates) errors.push(`본문 절 "### ${name}"이 두 번 있습니다.`);
 
