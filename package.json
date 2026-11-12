@@ -17,12 +17,16 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check:build": "node scripts/ci/check-build-output.js",
+    "lint:firefox": "web-ext lint --source-dir .output/firefox-mv3",
+    "test:e2e": "playwright test",
     "fixtures:snippet": "node scripts/fixtures/build-snippet.ts",
     "tokens:preview": "vite --config scripts/tokens-preview/vite.config.ts",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.0",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.14.0",

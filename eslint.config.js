@@ -5,7 +5,17 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['.output/', '.wxt/', 'node_modules/', 'coverage/', 'local-data/'] },
+  {
+    ignores: [
+      '.output/',
+      '.wxt/',
+      'node_modules/',
+      'coverage/',
+      'local-data/',
+      'playwright-report/',
+      'test-results/',
+    ],
+  },
   eslint.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
   {

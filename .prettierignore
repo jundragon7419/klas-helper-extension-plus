@@ -2,6 +2,8 @@
 .wxt/
 node_modules/
 coverage/
+playwright-report/
+test-results/
 local-data/
 package-lock.json
 

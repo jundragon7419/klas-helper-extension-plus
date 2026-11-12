@@ -1,0 +1,26 @@
+{
+  "chrome-mv3": {
+    "permissions": ["alarms", "storage"],
+    "optional_permissions": [],
+    "host_permissions": [],
+    "optional_host_permissions": [],
+    "content_script_matches": [
+      "https://klas.kw.ac.kr/*",
+      "https://klas.kw.ac.kr/std/*",
+      "https://klas.kw.ac.kr/std/cps/atnlc/LectrePlanStdPage.do*",
+      "https://klas.kw.ac.kr/std/lis/evltn/OnlineCntntsStdPage.do*"
+    ]
+  },
+  "firefox-mv3": {
+    "permissions": ["alarms", "storage"],
+    "optional_permissions": [],
+    "host_permissions": [],
+    "optional_host_permissions": [],
+    "content_script_matches": [
+      "https://klas.kw.ac.kr/*",
+      "https://klas.kw.ac.kr/std/*",
+      "https://klas.kw.ac.kr/std/cps/atnlc/LectrePlanStdPage.do*",
+      "https://klas.kw.ac.kr/std/lis/evltn/OnlineCntntsStdPage.do*"
+    ]
+  }
+}

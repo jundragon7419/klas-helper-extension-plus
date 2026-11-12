@@ -34,8 +34,10 @@ local-data/
 .DS_Store
 Thumbs.db
 
-# 테스트 커버리지
+# 테스트 커버리지와 E2E 결과
 coverage/
+playwright-report/
+test-results/
 
 # Codex 개인 설정과 스킬
 /.codex/
