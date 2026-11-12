@@ -91,83 +91,61 @@ jobs:
       reason: ${{ steps.decide.outputs.reason }}
       task: ${{ steps.decide.outputs.task }}
     steps:
+      # 판단 코드는 항상 기본 브랜치에서 읽는다. PR 브랜치를 체크아웃하면 PR이 판단 코드를 바꿔 쓰기 권한으로 실행할 수 있다.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: scripts/ai
+
       - id: decide
         uses: actions/github-script@v7
         with:
           script: |
+            const { decideReview } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/review-decision.js`);
             const p = context.payload;
             const number = p.pull_request?.number ?? p.issue?.number ?? p.workflow_run?.pull_requests?.[0]?.number;
-            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
-            const labels = pr.labels.map((l) => l.name);
-            const out = (action, reason = '') => {
-              core.setOutput('action', action); core.setOutput('pr', String(pr.number));
-              core.setOutput('branch', pr.head.ref); core.setOutput('reason', reason);
-              core.info(`${action}: ${reason}`);
-            };
-            // 자동 흐름 PR이고, 같은 저장소 브랜치이며, 아직 멈추지 않았을 때만 판단한다.
-            const active = labels.includes('ai:in-progress') || labels.includes('ai:ready');
-            if (pr.state !== 'open' || !active || labels.includes('ai:needs-human')
-                || pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) return out('none', 'not an active AI PR');
-
+            const repo = context.repo;
+            const { data: pr } = await github.rest.pulls.get({ ...repo, pull_number: number });
             const head = pr.head.sha;
-            const bot = process.env.CODEX_BOT;
-            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: pr.number });
-            // 처리 표시는 Claude가 남긴 댓글만 인정한다.
-            const handled = (id) => comments.some((c) => c.user?.login === 'claude[bot]' && c.body?.includes(`<!-- ai-handled:${id} -->`));
-
-            // 1. 현재 head에 대한 Codex 리뷰 중 지적이 있는 것
-            const reviews = (await github.paginate(github.rest.pulls.listReviews, { ...context.repo, pull_number: pr.number }))
-              .filter((r) => r.user?.login === bot && r.commit_id === head);
-            let finding = null;
-            for (const r of reviews) {
-              const inline = await github.paginate(github.rest.pulls.listCommentsForReview, { ...context.repo, pull_number: pr.number, review_id: r.id });
-              // 지적은 줄 단위 댓글로 판단한다. 리뷰 본문은 언어와 문구가 바뀔 수 있어 보지 않는다.
-              if (inline.length > 0) finding = r;
+            const comments = (await github.paginate(github.rest.issues.listComments, { ...repo, issue_number: number }))
+              .map((c) => ({ login: c.user?.login ?? '', body: c.body ?? '' }));
+            const reviews = [];
+            for (const r of await github.paginate(github.rest.pulls.listReviews, { ...repo, pull_number: number })) {
+              if (r.user?.login !== process.env.CODEX_BOT || r.commit_id !== head) continue;
+              const inline = await github.paginate(github.rest.pulls.listCommentsForReview, { ...repo, pull_number: number, review_id: r.id });
+              reviews.push({ id: r.id, login: r.user.login, commitId: r.commit_id, inlineCount: inline.length });
             }
-            // 2. Codex 요약 댓글의 상태 표시가 현재 head의 검토 완료를 가리키는지
-            let state = null;
-            for (const c of comments.filter((c) => c.user?.login === bot)) {
-              const m = c.body?.match(/<!-- codex-review-state:v1 (\{.*?\}) -->/);
-              if (m) { try { state = JSON.parse(m[1]).code_review; } catch { /* 형식이 바뀌면 통과로 보지 않는다 */ } }
-            }
-            const passed = state?.commit_sha === head && state?.status === 'completed'
-              && state?.has_any_findings === false && !finding;
-            // 3. 현재 head의 CI(check) 결과
-            const runs = (await github.rest.checks.listForRef({ ...context.repo, ref: head, check_name: 'check' })).data.check_runs;
-            const ci = runs.length === 0 ? 'missing' : runs.some((r) => r.status !== 'completed') ? 'pending'
-              : runs.every((r) => r.conclusion === 'success') ? 'success' : 'failure';
+            const checkRuns = (await github.rest.checks.listForRef({ ...repo, ref: head, check_name: 'check' })).data.check_runs
+              .map((r) => ({ status: r.status, conclusion: r.conclusion }));
 
-            let task = null;
-            if (finding && !handled(`review-${finding.id}`)) task = { id: `review-${finding.id}`, reason: `codex review ${finding.id}` };
-            else if (ci === 'failure' && !handled(`ci-${head}`)) task = { id: `ci-${head}`, reason: `CI failed on ${head.slice(0, 7)}` };
+            const d = decideReview({
+              labels: pr.labels.map((l) => l.name),
+              open: pr.state === 'open',
+              sameRepo: pr.head.repo?.full_name === `${repo.owner}/${repo.repo}`,
+              head, comments, reviews, checkRuns,
+              codexBot: process.env.CODEX_BOT,
+              handlerBot: 'claude[bot]',
+            });
+            core.info(`${d.action}: ${d.reason}`);
 
-            if (task) {
-              if (labels.includes('ai:ready')) {
-                await github.rest.issues.removeLabel({ ...context.repo, issue_number: pr.number, name: 'ai:ready' });
-                await github.rest.issues.addLabels({ ...context.repo, issue_number: pr.number, labels: ['ai:in-progress'] });
-              }
-              const round = labels.filter((l) => /^ai:round-\d$/.test(l)).length + 1;
-              if (round > 3) {
-                await github.rest.issues.addLabels({ ...context.repo, issue_number: pr.number, labels: ['ai:needs-human'] });
-                await github.rest.issues.createComment({ ...context.repo, issue_number: pr.number,
-                  body: `@${process.env.MAINTAINER} 검토 반영을 3회 했지만 남은 지적이 있어 자동 흐름을 멈췄습니다 (${task.reason}).` });
-                return out('none', 'round limit');
-              }
-              await github.rest.issues.addLabels({ ...context.repo, issue_number: pr.number, labels: [`ai:round-${round}`] });
-              core.setOutput('task', task.id);
-              return out('fix', `${task.reason}; task=${task.id}; round=${round}`);
+            for (const name of d.removeLabels) {
+              await github.rest.issues.removeLabel({ ...repo, issue_number: number, name }).catch(() => {});
             }
-
-            if (passed && ci === 'success' && !labels.includes('ai:ready')) {
-              await github.rest.issues.removeLabel({ ...context.repo, issue_number: pr.number, name: 'ai:in-progress' });
-              await github.rest.issues.addLabels({ ...context.repo, issue_number: pr.number, labels: ['ai:ready'] });
-              await github.rest.issues.createComment({ ...context.repo, issue_number: pr.number,
-                body: [`@${process.env.MAINTAINER} 확인 준비가 끝났습니다.`, '',
-                  `- 검토한 커밋: ${head}`, '- Codex 리뷰: 현재 커밋에서 주요 지적 없음', '- CI(check): 성공', '',
-                  'PR 본문의 "KLAS에서 직접 확인할 항목"을 확인한 뒤 머지해 주세요. Squash 커밋 메시지는 PR 본문 맨 아래에 있습니다.'].join('\n') });
-              return out('none', 'ready');
+            if (d.addLabels.length) await github.rest.issues.addLabels({ ...repo, issue_number: number, labels: d.addLabels });
+            const say = (body) => github.rest.issues.createComment({ ...repo, issue_number: number, body });
+            if (d.action === 'stop') {
+              await say(`@${process.env.MAINTAINER} 검토 반영을 3회 했지만 남은 지적이 있어 자동 흐름을 멈췄습니다 (${d.reason}).`);
             }
-            return out('none', `waiting (codex=${state?.commit_sha?.slice(0, 7)}/${state?.status}, finding=${!!finding}, ci=${ci})`);
+            if (d.action === 'ready') {
+              await say([`@${process.env.MAINTAINER} 확인 준비가 끝났습니다.`, '',
+                `- 검토한 커밋: ${head}`, '- Codex 리뷰: 현재 커밋에서 주요 지적 없음', '- CI(check): 성공', '',
+                'PR 본문의 "KLAS에서 직접 확인할 항목"을 확인한 뒤 머지해 주세요. Squash 커밋 메시지는 PR 본문 맨 아래에 있습니다.'].join('\n'));
+            }
+            core.setOutput('action', d.action);
+            core.setOutput('pr', String(number));
+            core.setOutput('branch', pr.head.ref);
+            core.setOutput('reason', d.reason);
+            core.setOutput('task', d.task ?? '');
 
   fix:
     needs: evaluate
