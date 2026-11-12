@@ -1,0 +1,47 @@
+.khp-lecture-filter {
+  margin: 8px 0;
+}
+
+.khp-lecture-filter-button {
+  padding: 6px 12px;
+  border: 1px solid #888;
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+}
+
+.khp-lecture-filter-button[aria-pressed='true'] {
+  background: #222;
+  border-color: #222;
+  color: #fff;
+}
+
+.khp-lecture-filter-button:focus-visible {
+  outline: 2px solid #0a58ca;
+  outline-offset: 2px;
+}
+
+.khp-lecture-filter-status {
+  margin-left: 8px;
+}
+
+[data-khp-lecture='hidden'] {
+  display: none !important;
+}
+
+/* 첫 행의 주차·단원·달성시간 칸은 남은 강의가 쓰므로, 완료한 강의 내용만 비운다. */
+tr[data-khp-lecture='shell'] > td:not([rowspan]) {
+  visibility: hidden;
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-width: 0;
+  border-bottom-width: 0;
+  font-size: 0;
+  line-height: 0;
+}
+
+tr[data-khp-lecture='shell'] > td:not([rowspan]) * {
+  display: none;
+}
