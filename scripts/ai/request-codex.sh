@@ -43,13 +43,16 @@ fi
 plan=$(MAINTAINER="$MAINTAINER" node "$here/relay.js" plan "$tmp/thread.jsonl" "$tmp/history.jsonl")
 target=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).target)' "$plan")
 ask_id=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).askId ?? ""))' "$plan")
+ask_issue=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).issue ?? ""))' "$plan")
+ask_pr=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).pr ?? ""))' "$plan")
 reason=$(node -e 'const p = JSON.parse(process.argv[1]); process.stdout.write([p.reason, ...p.errors].join(" / ").replace(/<!--/g, "&lt;!--").replace(/-->/g, "--&gt;"))' "$plan")
 if [ "$target" = user ]; then
   notify_now "$reason"
   exit 0
 fi
 
-node "$here/relay.js" body "$KIND" "$RUN_URL" "$KEY" $ask_id > "$tmp/codex-request.md"
+# 요청에 answer, need-user 틀을 채워 넣는다(scripts/ai/codex-requests.js relayTemplates).
+node "$here/relay.js" body "$KIND" "$RUN_URL" "$KEY" "$ask_id" "$ask_issue" "$ask_pr" > "$tmp/codex-request.md"
 if ! gh api -X POST "repos/$GH_REPO/issues/$TARGET/comments" -F "body=@$tmp/codex-request.md" > /dev/null; then
   # 토큰이 만료됐거나 권한이 부족한 경우. ai-implement의 PR 열기가 같은 이유로 실패했을 때도 여기로 온다.
   notify_now "MAINTAINER_PR_TOKEN으로 Codex 요청을 달지 못함"

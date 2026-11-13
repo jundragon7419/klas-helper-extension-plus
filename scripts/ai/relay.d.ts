@@ -14,7 +14,13 @@ export function rolesOf(input: { codexBot: string; claudeBot?: string; maintaine
 
 export function relayRequestBody(
   kind: RelayKind,
-  options: { runUrl: string; key: string; askId?: number | null },
+  options: {
+    runUrl: string;
+    key: string;
+    askId?: number | null;
+    issue?: number | null;
+    pr?: number | null;
+  },
 ): string;
 
 export interface ThreadComment {
@@ -32,6 +38,9 @@ export function decideRelayTarget(input: {
   askId: number | null;
   reason: string;
   errors: string[];
+  /** Codex에게 넘길 때 ask의 이슈, PR 번호(답 틀을 채운다) */
+  issue?: number | null;
+  pr?: number | null;
 };
 
 export function expectedIssueOf(input: { number: number; headRef?: string | null }): number | null;

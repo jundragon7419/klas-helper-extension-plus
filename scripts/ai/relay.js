@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { parseMessage, validateMessage } from './ai-msg.js';
+import { relayTemplates } from './codex-requests.js';
 
 export const PING_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -31,7 +32,7 @@ export function rolesOf({ codexBot, claudeBot = 'claude[bot]', maintainer }) {
  * 사용자 계정으로 다는 @codex 요청 본문. 첫 줄이 "@codex"로 시작해야 Codex가 작업을 시작한다.
  * askId가 있으면 그 ask나 objection에 ai-msg 형식으로 답하게 한다.
  */
-export function relayRequestBody(kind, { runUrl, key, askId = null }) {
+export function relayRequestBody(kind, { runUrl, key, askId = null, issue = null, pr = null }) {
   const what = KIND_TEXT[kind];
   if (!what) throw new Error(`알 수 없는 멈춤 종류: ${kind}`);
   const target = askId
@@ -46,6 +47,8 @@ export function relayRequestBody(kind, { runUrl, key, askId = null }) {
     '3. 답할 수 없으면 `need-user`로 사용자가 확인할 것, 확인 방법, 이 스레드에 붙일 것을 적는다.',
     `4. 답은 AGENTS.md "AI 메시지 형식"으로 쓰고 표시 줄의 reply-to에 ${askId ?? '-'}를 적는다. 형식이 틀리면 Claude를 다시 부르지 않는다.`,
     '',
+    // 틀을 넣으면 Codex가 형식을 지킨다(#145). 질문 메시지에서 이슈 번호를 알 때만 채울 수 있다.
+    ...(askId && issue ? [relayTemplates({ issue, pr, askId }), ''] : []),
     `실행 기록: ${runUrl}`,
     '',
     `<!-- ai-relay:${key} -->`,
@@ -170,7 +173,9 @@ export function decideRelayTarget({ comments, history = [], roles }) {
       return { target: 'user', askId: latest.id, reason: '같은 질문이 반복됨', errors: [] };
     }
   }
-  return { target: 'codex', askId: latest.id, reason: type, errors: [] };
+  const issue = Number(latest.message.meta.issue);
+  const pr = latest.message.meta.pr === '-' ? null : Number(latest.message.meta.pr);
+  return { target: 'codex', askId: latest.id, reason: type, errors: [], issue, pr };
 }
 
 /**
@@ -288,9 +293,11 @@ export function readCommentLines(text) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [, , command, ...args] = process.argv;
   if (command === 'body') {
-    const [kind, runUrl, key, askId] = args;
+    const [kind, runUrl, key, askId, issue, pr] = args;
+    const num = (v) => (v && /^[1-9][0-9]*$/.test(v) ? Number(v) : null);
     process.stdout.write(
-      relayRequestBody(kind, { runUrl, key, askId: askId ? Number(askId) : null }) + '\n',
+      relayRequestBody(kind, { runUrl, key, askId: num(askId), issue: num(issue), pr: num(pr) }) +
+        '\n',
     );
   } else if (command === 'plan') {
     const comments = readCommentLines(readFileSync(args[0], 'utf8'));

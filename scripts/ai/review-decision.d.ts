@@ -52,6 +52,8 @@ export interface CheckRun {
 
 export function summarizeChecks(runs: CheckRun[]): 'missing' | 'pending' | 'success' | 'failure';
 
+import type { Finding, InlineComment } from './codex-requests.js';
+
 export interface ReviewInput {
   labels: string[];
   open: boolean;
@@ -62,11 +64,19 @@ export interface ReviewInput {
   checkRuns: CheckRun[];
   codexBot: string;
   handlerBot: string;
+  /** 리뷰 정리 요청을 다는 메인테이너 계정 */
+  maintainer?: string;
+  /** PR의 줄 단위 리뷰 댓글 */
+  inlineComments?: InlineComment[];
 }
 
 export interface ReviewDecision {
-  action: 'none' | 'fix' | 'ready' | 'stop' | 'halt';
+  action: 'none' | 'fix' | 'ready' | 'stop' | 'halt' | 'triage';
   reason: string;
+  /** halt일 때 사용자에게 알릴 말 */
+  message?: string | null;
+  /** triage일 때 Codex에게 넘길 지적 */
+  findings?: Finding[];
   /** halt일 때 사용자에게 알릴 Codex 작업 결과 댓글 ID */
   notice?: number | null;
   task?: string;

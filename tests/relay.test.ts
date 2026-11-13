@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { formatMessage } from '../scripts/ai/ai-msg.js';
+import { formatMessage, parseMessage } from '../scripts/ai/ai-msg.js';
 import {
   classifyCodexReply,
   decidePing,
@@ -60,6 +60,35 @@ describe('relayRequestBody', () => {
     expect(body).toContain('reply-to에 77');
     expect(body).toContain('`answer`');
     expect(body).toContain('`need-user`');
+  });
+
+  it('이슈 번호를 알면 채워진 answer, need-user 틀을 넣는다(#145)', () => {
+    const body = relayRequestBody('rebuttal', {
+      runUrl: 'u',
+      key: 'k',
+      askId: 77,
+      issue: 104,
+      pr: 111,
+    });
+    expect(body).toContain(
+      '<!-- ai-msg:v1 type=answer issue=104 pr=111 head=- rev=- reply-to=77 -->',
+    );
+    expect(body).toContain(
+      '<!-- ai-msg:v1 type=need-user issue=104 pr=111 head=- rev=- reply-to=77 -->',
+    );
+    expect(body).toContain('코드 블록 표시');
+    // 틀은 코드 블록 안에 있어 요청 댓글 자체는 메시지로 읽히지 않는다.
+    expect(parseMessage(body)).toBeNull();
+    const issueOnly = relayRequestBody('implement', {
+      runUrl: 'u',
+      key: 'k',
+      askId: 77,
+      issue: 104,
+    });
+    expect(issueOnly).toContain('type=answer issue=104 pr=- head=-');
+    expect(relayRequestBody('implement', { runUrl: 'u', key: 'k', askId: 77 })).not.toContain(
+      'type=answer',
+    );
   });
 
   it('모르는 멈춤 종류는 거부한다', () => {
@@ -512,6 +541,8 @@ describe('decideRelayTarget', () => {
       askId: a.id,
       reason: 'ask',
       errors: [],
+      issue: 104,
+      pr: null,
     });
     const o = objection();
     expect(decideRelayTarget({ comments: [a, o], roles }).askId).toBe(o.id);

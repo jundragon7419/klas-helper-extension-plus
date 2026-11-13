@@ -1,3 +1,4 @@
+import { triageRequestBody } from '../scripts/ai/codex-requests.js';
 import { describe, expect, it } from 'vitest';
 import { formatMessage } from '../scripts/ai/ai-msg.js';
 import {
@@ -160,6 +161,42 @@ describe('classifyChange', () => {
   });
 });
 
+describe('근거별 change 횟수', () => {
+  const triage = (id: number) => ({
+    id,
+    login: ME,
+    body: `@codex (자동 요청) 리뷰 정리\n\n<!-- ai-review-triage:v1 {"head":"${'a'.repeat(40)}","findings":[]} -->`,
+  });
+
+  it('change 틀을 담은 Codex 요청 댓글은 change가 아니다', () => {
+    const req = {
+      id: 50,
+      login: ME,
+      body: triageRequestBody({
+        issue: 104,
+        pr: 111,
+        head: 'a'.repeat(40),
+        rev: 2,
+        findings: [],
+        runUrl: 'r',
+      }),
+    };
+    expect(classify(req, [request, req]).kind).toBe('none');
+  });
+
+  it('리뷰 정리와 사용자 수정 요청은 따로 센다', () => {
+    const reviews = [triage(11), triage(12), triage(13)];
+    const earlier = reviews.map((r, i) => change(20 + i, { rev: i + 1, 'reply-to': r.id }));
+    // 리뷰 정리 3회를 쓴 뒤에도 사용자 수정 요청은 실행한다.
+    const user = change(40, { rev: 4 });
+    expect(classify(user, [request, ...reviews, ...earlier, user]).kind).toBe('run');
+    // 리뷰 정리는 4회째에 멈춘다.
+    const fourth = triage(30);
+    const next = change(41, { rev: 4, 'reply-to': 30 });
+    expect(classify(next, [request, ...reviews, ...earlier, fourth, next]).kind).toBe('limit');
+  });
+});
+
 describe('decideChange', () => {
   const run = { kind: 'run' as const, errors: [], changeId: 20, rev: 1, replyTo: 10 };
 
@@ -200,14 +237,14 @@ describe('decideChange', () => {
     ).toBe('none');
   });
 
-  it('형식 오류는 알리기만 하고, 회차 초과는 멈춘다', () => {
+  it('형식 오류와 회차 초과는 알리고 멈춘다', () => {
     const invalid = { kind: 'invalid' as const, errors: ['x'] };
     expect(
       decideChange({ labels: ['ai:ready'], open: true, sameRepo: true, reply: invalid }),
     ).toMatchObject({
       action: 'reject',
-      addLabels: [],
-      removeLabels: [],
+      addLabels: ['ai:needs-human'],
+      removeLabels: ['ai:ready'],
     });
     const limit = { kind: 'limit' as const, errors: ['x'], changeId: 40 };
     expect(
