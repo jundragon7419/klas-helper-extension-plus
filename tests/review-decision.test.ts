@@ -5,7 +5,15 @@ import {
   parseCodexState,
   summarizeChecks,
   type ReviewInput,
+  classifyCodexTask,
+  codeChangeNotice,
 } from '../scripts/ai/review-decision.js';
+import {
+  codeChangeEn,
+  codeChangeKo,
+  reviewNoFindings,
+  reviewWithP1,
+} from './helpers/codex-tasks.ts';
 
 // AI review loop 워크플로의 판단(scripts/ai/review-decision.js)을 검사한다.
 const CODEX = 'chatgpt-codex-connector[bot]';
@@ -275,5 +283,89 @@ describe('decideAnswerRestart', () => {
     expect(
       decideAnswerRestart({ ...base, sameRepo: false, labels: ['ai:in-progress'] }).action,
     ).toBe('none');
+  });
+});
+
+describe('classifyCodexTask', () => {
+  it('실제 작업 결과 댓글을 리뷰와 코드 수정으로 나눈다', () => {
+    expect(classifyCodexTask(reviewNoFindings(HEAD), HEAD)).toEqual({
+      kind: 'review',
+      findings: 0,
+      blocking: 0,
+    });
+    expect(classifyCodexTask(reviewWithP1(HEAD), HEAD)).toEqual({
+      kind: 'review',
+      findings: 1,
+      blocking: 1,
+    });
+    expect(classifyCodexTask(codeChangeKo(HEAD), HEAD)?.kind).toBe('code-change');
+    expect(classifyCodexTask(codeChangeEn(HEAD), HEAD)?.kind).toBe('code-change');
+  });
+
+  it('현재 커밋 링크가 없거나 작업 결과가 아니면 null, 리뷰도 수정도 아니면 other', () => {
+    expect(classifyCodexTask(reviewWithP1(OLD), HEAD)).toBeNull();
+    expect(classifyCodexTask(state(HEAD).body, HEAD)).toBeNull();
+    const other = `질문에 대한 설명입니다. [a](https://github.com/o/r/blob/${HEAD}/a.js)\n[View task →](https://x)`;
+    expect(classifyCodexTask(other, HEAD)?.kind).toBe('other');
+  });
+});
+
+describe('decideReview와 Codex 작업 결과', () => {
+  const at = (body: string, time: string, id = 50) => ({ id, login: CODEX, body, at: time });
+
+  it('Codex가 코드를 고친 작업 결과가 남으면 사용자에게 넘긴다', () => {
+    const d = decideReview(
+      input({ labels: ['ai:ready'], comments: [at(codeChangeEn(HEAD), '2026-11-13T02:13:02Z')] }),
+    );
+    expect(d).toMatchObject({
+      action: 'halt',
+      notice: 50,
+      addLabels: ['ai:needs-human', 'ai:in-progress'],
+      removeLabels: ['ai:ready'],
+    });
+  });
+
+  it('그 뒤에 현재 커밋을 다시 리뷰받았으면 리뷰로 판단한다', () => {
+    const d = decideReview(
+      input({
+        comments: [
+          at(codeChangeEn(HEAD), '2026-11-13T02:13:02Z'),
+          at(reviewNoFindings(HEAD), '2026-11-13T05:00:00Z', 51),
+        ],
+      }),
+    );
+    expect(d.action).toBe('ready');
+  });
+
+  it('작업 결과 리뷰에 지적이 있으면 그 댓글을 고칠 대상으로 삼는다', () => {
+    const d = decideReview(
+      input({ comments: [at(reviewWithP1(HEAD), '2026-11-13T02:00:00Z', 60)] }),
+    );
+    expect(d).toMatchObject({ action: 'fix', task: 'task-60', round: 1 });
+    const handled = { login: CLAUDE, body: 'report\n<!-- ai-handled:task-60 -->' };
+    expect(
+      decideReview(
+        input({ comments: [at(reviewWithP1(HEAD), '2026-11-13T02:00:00Z', 60), handled] }),
+      ).action,
+    ).toBe('none');
+  });
+
+  it('지적 없는 작업 결과 리뷰와 CI 통과면 준비 완료', () => {
+    expect(
+      decideReview(input({ comments: [at(reviewNoFindings(HEAD), '2026-11-13T02:00:00Z')] }))
+        .action,
+    ).toBe('ready');
+  });
+
+  it('알림에 작업 결과 링크와 다시 진행하는 방법을 적는다', () => {
+    const text = codeChangeNotice({
+      maintainer: 'jundragon7419',
+      head: HEAD,
+      url: 'https://x/#issuecomment-50',
+    });
+    expect(text).toContain('@jundragon7419');
+    expect(text).toContain('https://x/#issuecomment-50');
+    expect(text).toContain('@codex review');
+    expect(text).toContain('ai:needs-human');
   });
 });

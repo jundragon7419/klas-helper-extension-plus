@@ -5,8 +5,8 @@ export const GATE_CONTEXT: string;
 export interface GateInput {
   head: string;
   labels: string[];
-  comments: { login: string; body: string }[];
-  reviews: { login: string; commitId: string }[];
+  comments: { id?: number; login: string; body: string; at?: string }[];
+  reviews: { login: string; commitId: string; at?: string }[];
   inlineComments: { login: string; originalCommitId: string; body: string }[];
   checkRuns: CheckRun[];
   codexBot: string;
