@@ -15,6 +15,17 @@
 - [ ] 새 KLAS API를 쓴다면 `docs/ARCHITECTURE.md`의 API 목록에 추가했습니다.
 - [ ] 테스트 fixture에 실제 학생 데이터가 없습니다.
 
+## Firefox 영향
+
+<!--
+Firefox에서 다르게 동작할 수 있는 변경이면 아래를 체크하고 확인할 것을 적습니다.
+예: content script의 KLAS 요청 방식, manifest 권한이나 사이트 권한, browser.* API 차이, content script 실행 시점이나 world.
+체크하면 firefox-check 라벨이 붙고, 릴리스 PR에서 Firefox로 직접 확인합니다.
+-->
+
+- [ ] 릴리스 전 Firefox 확인 필요
+  - 확인할 것:
+
 ## 추가한 권한과 이유
 
 <!-- 없으면 "없음" -->

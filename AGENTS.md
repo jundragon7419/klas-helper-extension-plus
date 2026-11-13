@@ -28,6 +28,7 @@ npm run test:e2e
 - PR 제목은 Squash 커밋 제목과 같은 영어 문장이다. 본문은 `.github/PULL_REQUEST_TEMPLATE.md`를 한국어로 채운다.
 - PR 본문 맨 아래에 `## Squash 커밋 메시지` 절을 두고 제목(끝에 `(#PR 번호)`), `- ` 목록 본문, 마지막 줄 `Closes #이슈 번호`를 적는다.
 - 직접 확인하지 않은 체크박스는 체크하지 않는다. 브라우저에서 확인할 항목은 "KLAS에서 직접 확인할 항목"으로 따로 적는다.
+- Firefox에서 다르게 동작할 수 있는 변경(content script의 KLAS 요청 방식, manifest 권한이나 사이트 권한, `browser.*` API 차이, content script 실행 시점이나 world)이면 PR 본문 "Firefox 영향"의 `릴리스 전 Firefox 확인 필요`를 체크하고 확인할 것을 적는다. 체크하면 `firefox-check` 라벨이 붙고 릴리스 PR에서 Firefox로 확인한다.
 - 라벨, 마일스톤은 이슈와 같게 하고 담당자는 `jundragon7419`로 한다.
 
 ## 작성 표시
@@ -161,6 +162,7 @@ Codex가 PR을 검토할 때 적용한다 (Code Review Rules).
 - 다음은 P1 이상으로 지적한다: 실제 학생 정보가 커밋에 들어감, manifest 권한 추가에 이유가 없음, KLAS 정보를 외부로 보냄, "하지 않는 것"의 기능, 테스트 없이 바뀐 동작, KLAS 응답이 비었거나 형식이 다를 때 잘못된 화면을 보여 줌, KLAS 화면을 바꾸는 content script 기능을 추가하거나 고쳤는데 `e2e/`의 가짜 KLAS 화면 테스트가 없음.
 - P0, P1 지적은 머지 게이트(`ai-gate`)가 머지를 막는다. P2 이하는 막지 않으므로, 머지 전에 꼭 고쳐야 하는 문제는 P1 이상으로 지적한다.
 - 지적에는 파일 위치, 실패하는 조건, 관찰한 결과, 기대 결과를 적는다. 취향 차이나 선택적 정리는 지적하지 않는다.
+- Firefox에서 다르게 동작할 수 있는 변경(content script의 KLAS 요청 방식, manifest 권한이나 사이트 권한, `browser.*` API 차이, content script 실행 시점이나 world)인데 PR 본문 "Firefox 영향"의 `릴리스 전 Firefox 확인 필요`가 체크되어 있지 않으면 P1로 지적한다. 지적에는 Firefox에서 확인할 것을 적는다. 체크되어 있는데 확인할 것이 비어 있으면 P2로 지적한다. Firefox 자동 E2E가 없어 이 표시가 빠지면 릴리스 전 확인에서도 빠진다.
 - 원본 KLAS Helper 코드를 가져왔다면 출처와 MIT 저작권 표시가 있는지 확인한다.
 - 리뷰와 댓글에 학생 정보, 쿠키, 응답 원문을 인용하지 않는다.
 - 지적 본문에 반응 요청 문구("Useful? React with 👍 / 👎.")와 도구 서명을 붙이지 않는다.
