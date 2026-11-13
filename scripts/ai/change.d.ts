@@ -12,6 +12,7 @@ export interface Revision {
 
 export function collectRevisions(input: {
   issue: number;
+  pr?: number | null;
   issueComments: ThreadComment[];
   prComments?: ThreadComment[];
   roles: Roles;

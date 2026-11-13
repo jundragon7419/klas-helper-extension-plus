@@ -11,30 +11,49 @@ const REV_TYPES = ['plan-rev', 'change'];
 const CHANGE_HEADER_RE = /<!--\s*ai-msg:\S*\s+type=change\b/i;
 
 /**
- * 이슈와 PR 스레드에서 계획 개정(plan-rev, change)을 rev 순으로 모은다.
- * 형식이 맞고, 보낼 수 있는 계정이 보냈고, issue 값이 이 이슈인 것만 센다.
- * @param {{issue: number, issueComments: {id: number, login: string, body: string}[], prComments?: {id: number, login: string, body: string}[], roles: import('./relay.js').Roles}} input
+ * 이슈와 PR 스레드에서 받아들인 계획 개정(plan-rev, change)을 rev 순으로 모은다.
+ * 형식이 맞고 보낼 수 있는 계정이 보낸 것 중 다음만 센다. 실행하지 않은 change가 계획이나 횟수에 들어가지 않게 한다.
+ * - plan-rev: 이슈 스레드에 있고, issue 값이 이 이슈이고, reply-to가 이슈에 먼저 달린 메인테이너 댓글
+ * - change: PR 스레드에 있고, issue와 pr 값이 맞고, reply-to가 PR에 먼저 달린 메인테이너 댓글이고,
+ *   rev가 앞서 받아들인 change보다 크고 그 전에 달린 plan-rev보다 작지 않고, PR당 MAX_CHANGES회 안
+ * @param {{issue: number, pr?: number | null, issueComments: {id: number, login: string, body: string}[], prComments?: {id: number, login: string, body: string}[], roles: import('./relay.js').Roles}} input
  */
-export function collectRevisions({ issue, issueComments, prComments = [], roles }) {
-  const revisions = [];
-  for (const [where, list] of [
-    ['issue', issueComments],
-    ['pr', prComments],
-  ]) {
-    for (const c of list) {
-      const { message, errors } = validateMessage(c, roles);
-      if (!message || errors.length || !REV_TYPES.includes(message.meta.type)) continue;
-      if (Number(message.meta.issue) !== issue) continue;
-      revisions.push({
-        id: c.id,
-        where,
-        type: message.meta.type,
-        rev: Number(message.meta.rev),
-        fields: message.fields,
+export function collectRevisions({ issue, pr = null, issueComments, prComments = [], roles }) {
+  const read = (list, type) =>
+    list
+      .map((c) => ({ c, ...validateMessage(c, roles) }))
+      .filter(
+        ({ message, errors }) =>
+          message &&
+          !errors.length &&
+          message.meta.type === type &&
+          Number(message.meta.issue) === issue,
+      )
+      .filter(({ c, message }) => {
+        const replyTo = Number(message.meta['reply-to']);
+        return list.some(
+          (r) => r.id === replyTo && r.id < c.id && roles.maintainer.includes(r.login),
+        );
       });
-    }
+
+  const plans = read(issueComments, 'plan-rev').map(({ c, message }) => ({
+    id: c.id,
+    where: 'issue',
+    type: 'plan-rev',
+    rev: Number(message.meta.rev),
+    fields: message.fields,
+  }));
+  const changes = [];
+  const candidates = pr === null ? [] : read(prComments, 'change');
+  for (const { c, message } of candidates.sort((a, b) => a.c.id - b.c.id)) {
+    if (changes.length >= MAX_CHANGES || Number(message.meta.pr) !== pr) continue;
+    const rev = Number(message.meta.rev);
+    const lastChange = Math.max(0, ...changes.map((r) => r.rev));
+    const lastPlan = Math.max(0, ...plans.filter((r) => r.id < c.id).map((r) => r.rev));
+    if (rev <= lastChange || rev < lastPlan) continue;
+    changes.push({ id: c.id, where: 'pr', type: 'change', rev, fields: message.fields });
   }
-  return revisions.sort((a, b) => a.rev - b.rev || a.id - b.id);
+  return [...plans, ...changes].sort((a, b) => a.rev - b.rev || a.id - b.id);
 }
 
 /**
@@ -90,14 +109,19 @@ export function classifyChange({ comment, comments, issueComments, roles, issue,
   }
 
   const rev = Number(message.meta.rev);
+  // 받아들인 개정만 센다. 거절했거나 회차를 넘긴 change는 rev와 횟수에 넣지 않는다.
   const prior = collectRevisions({
     issue: typeof issue === 'number' ? issue : -1,
+    pr,
     issueComments,
     prComments: before,
     roles,
   });
+  const lastPlan = Math.max(
+    0,
+    ...prior.filter((r) => r.type === 'plan-rev' && r.id < comment.id).map((r) => r.rev),
+  );
   const lastChange = Math.max(0, ...prior.filter((r) => r.type === 'change').map((r) => r.rev));
-  const lastPlan = Math.max(0, ...prior.filter((r) => r.type === 'plan-rev').map((r) => r.rev));
   // 이슈에 같은 rev의 plan-rev를 먼저 남기고 change를 다는 경우도 인정한다.
   if (rev <= lastChange || rev < lastPlan) {
     problems.push(

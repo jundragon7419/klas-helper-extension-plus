@@ -40,6 +40,8 @@ const planRev = (id: number, rev: number, login = CODEX) => ({
   ),
 });
 const request = { id: 10, login: ME, body: '@codex 링크 색을 헤더와 같게 바꿔 줘' };
+// 이슈에서 plan-rev의 근거가 되는 메인테이너 댓글
+const issueRequest = { id: 1, login: ME, body: '@codex 완료 조건을 바꿔 줘' };
 
 const classify = (
   comment: { id: number; login: string; body: string },
@@ -114,15 +116,19 @@ describe('classifyChange', () => {
     expect(classify(same, [request, first, done, same]).kind).toBe('invalid');
     const next = change(30, { rev: 2 });
     expect(classify(next, [request, first, done, next]).kind).toBe('run');
-    expect(classify(change(30, { rev: 2 }), undefined, [planRev(5, 3)]).kind).toBe('invalid');
+    expect(classify(change(30, { rev: 2 }), undefined, [issueRequest, planRev(5, 3)]).kind).toBe(
+      'invalid',
+    );
     // 이슈에 같은 rev의 plan-rev를 먼저 남긴 경우
-    expect(classify(change(30, { rev: 3 }), undefined, [planRev(5, 3)]).kind).toBe('run');
+    expect(classify(change(30, { rev: 3 }), undefined, [issueRequest, planRev(5, 3)]).kind).toBe(
+      'run',
+    );
   });
 
   it('다른 계정이 단 plan-rev는 rev 계산에 넣지 않는다', () => {
-    expect(classify(change(30, { rev: 1 }), undefined, [planRev(5, 9, 'someone')]).kind).toBe(
-      'run',
-    );
+    expect(
+      classify(change(30, { rev: 1 }), undefined, [issueRequest, planRev(5, 9, 'someone')]).kind,
+    ).toBe('run');
   });
 
   it('이미 처리한 change는 다시 실행하지 않는다', () => {
@@ -131,6 +137,19 @@ describe('classifyChange', () => {
     expect(classify(c, [request, c, done]).kind).toBe('none');
     const fake = { id: 21, login: 'someone', body: '<!-- ai-handled:change-20 -->' };
     expect(classify(c, [request, c, fake]).kind).toBe('run');
+  });
+
+  it('실행하지 않은 change는 rev와 횟수에 넣지 않는다', () => {
+    const rejected = Array.from({ length: MAX_CHANGES }, (_, i) =>
+      change(20 + i, { rev: 5 + i, 'reply-to': 99 }),
+    );
+    const otherPr = change(30, { rev: 9, pr: 112 });
+    const next = change(40, { rev: 1 });
+    expect(classify(next, [request, ...rejected, otherPr, next]).kind).toBe('run');
+  });
+
+  it('근거 댓글이 없는 plan-rev는 rev 계산에 넣지 않는다', () => {
+    expect(classify(change(30, { rev: 1 }), undefined, [planRev(5, 3)]).kind).toBe('run');
   });
 
   it(`PR당 ${MAX_CHANGES}회를 넘으면 멈춘다`, () => {
@@ -205,7 +224,8 @@ describe('collectRevisions와 formatPlan', () => {
   it('이슈와 PR의 개정을 rev 순으로 모으고 최신 rev를 적는다', () => {
     const revisions = collectRevisions({
       issue: ISSUE,
-      issueComments: [planRev(5, 1), planRev(6, 1, 'someone')],
+      pr: PR,
+      issueComments: [issueRequest, planRev(5, 1), planRev(6, 1, 'someone')],
       prComments: [request, change(20, { rev: 2 })],
       roles,
     });
@@ -223,6 +243,34 @@ describe('collectRevisions와 formatPlan', () => {
     expect(plan).toContain('## rev 0: 이슈 본문 (링크 색)');
     expect(plan).toContain('## rev 2: change (PR 댓글 20)');
     expect(plan).toContain('- 링크 글자색');
+  });
+
+  it('실행하지 않은 change와 회차를 넘긴 change는 계획에 넣지 않는다', () => {
+    const accepted = Array.from({ length: MAX_CHANGES }, (_, i) => change(20 + i, { rev: i + 1 }));
+    const revisions = collectRevisions({
+      issue: ISSUE,
+      pr: PR,
+      issueComments: [],
+      prComments: [
+        request,
+        change(15, { rev: 7, 'reply-to': 99 }),
+        ...accepted,
+        change(30, { rev: 2 }),
+        change(40, { rev: MAX_CHANGES + 1 }),
+      ],
+      roles,
+    });
+    expect(revisions.map((r) => r.id)).toEqual(accepted.map((c) => c.id));
+  });
+
+  it('pr을 모르면 change를 모으지 않는다', () => {
+    const revisions = collectRevisions({
+      issue: ISSUE,
+      issueComments: [],
+      prComments: [request, change(20)],
+      roles,
+    });
+    expect(revisions).toEqual([]);
   });
 
   it('옮긴 글의 숨은 표시를 무력화한다', () => {

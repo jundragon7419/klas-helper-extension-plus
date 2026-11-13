@@ -216,7 +216,7 @@ jobs:
             // Claude는 이슈 본문과 계획 개정(plan-rev, change) 중 최신 rev를 기준으로 고친다.
             if (d.action === 'fix' && typeof expectedIssue === 'number') {
               const { data: issue } = await github.rest.issues.get({ ...repo, issue_number: expectedIssue });
-              const revisions = collectRevisions({ issue: expectedIssue, issueComments: await loadIssueComments(), prComments: comments, roles });
+              const revisions = collectRevisions({ issue: expectedIssue, pr: number, issueComments: await loadIssueComments(), prComments: comments, roles });
               core.setOutput('plan', formatPlan({ issue: expectedIssue, title: issue.title, body: issue.body ?? '', revisions }));
             }
 
