@@ -1,10 +1,28 @@
-// scripts/fixtures/snippet.ts를 콘솔에 붙여 넣을 수 있는 한 파일로 묶는다.
-// 실행: npm run fixtures:snippet
+// 브라우저 콘솔에 붙여 넣을 수집 스크립트를 한 파일로 묶는다.
+// 실행: npm run fixtures:snippet (API 응답), npm run fixtures:dom-snippet (화면 DOM 발췌)
 
 import { build, type Plugin } from 'vite';
 
+const SNIPPETS = {
+  api: {
+    entry: 'scripts/fixtures/snippet.ts',
+    fileName: 'klas-fixture-snippet.js',
+    name: 'klasFixture',
+  },
+  dom: {
+    entry: 'scripts/fixtures/dom-snippet.ts',
+    fileName: 'klas-dom-snippet.js',
+    name: 'klasDomFixture',
+  },
+} as const;
+
+const kind = (process.argv[2] ?? 'api') as keyof typeof SNIPPETS;
+if (!Object.hasOwn(SNIPPETS, kind)) {
+  console.error(`알 수 없는 스크립트 종류: ${kind} (api 또는 dom)`);
+  process.exit(1);
+}
+const { entry, fileName, name } = SNIPPETS[kind];
 const outDir = 'local-data';
-const fileName = 'klas-fixture-snippet.js';
 
 /** 비ASCII 문자를 \uXXXX로 바꾼다. */
 const toAscii = (code: string) =>
@@ -34,9 +52,9 @@ await build({
     emptyOutDir: false,
     minify: false,
     lib: {
-      entry: 'scripts/fixtures/snippet.ts',
+      entry,
       formats: ['iife'],
-      name: 'klasFixture',
+      name,
       fileName: () => fileName,
     },
   },
