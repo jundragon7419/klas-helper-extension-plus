@@ -311,7 +311,11 @@ describe.skipIf(!hasBash)('request-codex.sh', () => {
 });
 
 // request-review.sh: 검토 반영이 push됐고 Codex 자동 검토가 시작되지 않았을 때만 메인테이너 계정으로 "@codex review"를 단다.
-describe.skipIf(!hasBash)('request-review.sh', () => {
+const hasJq = spawnSync('jq', ['--version']).status === 0;
+const reactions = (createdAt: string) =>
+  JSON.stringify([{ id: 123, user: { login: CODEX }, content: 'eyes', created_at: createdAt }]);
+
+describe.skipIf(!hasBash || !hasJq)('request-review.sh', () => {
   let root: string;
   let calls: string;
   let bin: string;
@@ -331,7 +335,8 @@ describe.skipIf(!hasBash)('request-review.sh', () => {
         ACTIONS_TOKEN: 'actions-token',
         CODEX_AUTO_REVIEW_WAIT: '0',
         CODEX_COMMENTS: '',
-        CODEX_EYES: '',
+        CODEX_REACTIONS: '[]',
+        REVIEW_SINCE: '2026-11-13T00:05:00Z',
         ...env,
       },
     });
@@ -356,7 +361,10 @@ describe.skipIf(!hasBash)('request-review.sh', () => {
         '[[ "$*" == *".head.sha"* ]] && echo "$NOW_SHA"',
         // --jq 대신 미리 거른 결과를 돌려준다.
         '[[ "$*" == *"/comments --paginate"* ]] && [ -n "$CODEX_COMMENTS" ] && echo "$CODEX_COMMENTS"',
-        '[[ "$*" == *"/reactions"* ]] && [ -n "$CODEX_EYES" ] && echo "$CODEX_EYES"',
+        // 반응 목록은 jq로 실제 --jq 식을 적용해 거른다.
+        'args=("$@"); jqf=""',
+        'for ((i = 0; i < ${#args[@]}; i++)); do [ "${args[$i]}" = "--jq" ] && jqf="${args[$((i + 1))]}"; done',
+        '[[ "$*" == *"/reactions"* ]] && echo "$CODEX_REACTIONS" | jq -r "$jqf"',
         'exit 0',
         '',
       ].join('\n'),
@@ -386,9 +394,25 @@ describe.skipIf(!hasBash)('request-review.sh', () => {
     expect(started.stdout).toContain('스스로 검토');
     expect(readCalls()).not.toContain('-X POST');
 
-    const eyes = run({ CODEX_EYES: '123' });
+    const eyes = run({ CODEX_REACTIONS: reactions('2026-11-13T00:06:00Z') });
     expect(eyes.stdout).toContain('스스로 검토');
     expect(readCalls()).not.toContain('-X POST');
+  });
+
+  it('이전 리뷰 때 남은 👀는 이번 커밋의 리뷰로 보지 않는다', () => {
+    const result = run({ CODEX_REACTIONS: reactions('2026-11-13T00:01:00Z') });
+    expect(result.stdout).toContain('재검토를 요청했습니다');
+    expect(readCalls()).toContain(
+      '-X POST repos/owner/repo/issues/111/comments -f body=@codex review',
+    );
+  });
+
+  it('다른 계정이나 다른 반응은 세지 않는다', () => {
+    const others = JSON.stringify([
+      { id: 1, user: { login: 'someone' }, content: 'eyes', created_at: '2026-11-13T00:06:00Z' },
+      { id: 2, user: { login: CODEX }, content: '+1', created_at: '2026-11-13T00:06:00Z' },
+    ]);
+    expect(run({ CODEX_REACTIONS: others }).stdout).toContain('재검토를 요청했습니다');
   });
 
   it('이전 커밋의 상태 표시만 있으면 요청한다', () => {

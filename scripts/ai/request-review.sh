@@ -19,12 +19,15 @@ if [ "$now" = "$BEFORE" ]; then
 fi
 
 codex_bot=${CODEX_BOT:-chatgpt-codex-connector[bot]}
+# 👀는 이전 리뷰 때 단 것이 남아 있을 수 있다. push 직후에 실행되므로, 시작 1분 전 이후에 단 것만 이번 커밋의 리뷰로 본다.
+# head 커밋 시각은 기준으로 쓰지 않는다. Claude가 커밋한 뒤 push까지 수십 분이 걸려, 그 사이의 이전 리뷰 👀를 잘못 셀 수 있다.
+since=${REVIEW_SINCE:-$(date -u -d '-60 seconds' +%Y-%m-%dT%H:%M:%SZ)}
 # 자동 검토가 시작됐는지: 요약 댓글의 상태 표시가 새 head를 가리키거나, Codex가 PR에 👀(검토 중)를 달았다.
 started() {
   GH_TOKEN="$ACTIONS_TOKEN" gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
     --jq ".[] | select(.user.login == \"$codex_bot\") | .body" | grep -q "\"commit_sha\":\"$now\"" && return 0
   GH_TOKEN="$ACTIONS_TOKEN" gh api "repos/$GH_REPO/issues/$PR/reactions" \
-    --jq ".[] | select(.user.login == \"$codex_bot\" and .content == \"eyes\") | .id" | grep -q .
+    --jq ".[] | select(.user.login == \"$codex_bot\" and .content == \"eyes\" and .created_at >= \"$since\") | .id" | grep -q .
 }
 deadline=$((SECONDS + ${CODEX_AUTO_REVIEW_WAIT:-180}))
 while :; do
