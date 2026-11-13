@@ -89,9 +89,9 @@ Claude와 Codex가 이슈와 PR 댓글로 서로에게 전하는 내용은 이 �
 | `answer` | Codex → Claude | issue, reply-to | 답, 근거, 재시작 | `ask`에 답할 때. 질문별 답과 근거(파일 위치나 URL), 재시작은 `예` 또는 `아니오` |
 | `need-user` | Codex → 사용자 | issue, reply-to | 확인할 것, 확인 방법, 붙일 것 | 저장소와 공개 자료로 답할 수 없을 때 |
 | `plan-rev` | Codex → Claude | issue, rev, reply-to | 바뀐 완료 조건, 이유 | PR이 열리기 전에 사용자 요청으로 이슈 계획을 고칠 때. 완료 조건은 바뀌기 전과 후를 함께 적는다 |
-| `change` | Codex → Claude | issue, pr, rev, reply-to | 바뀐 완료 조건, 이유, 바꿀 항목 | 열린 PR에 대한 사용자 수정 요청을 계획 개정과 함께 Claude에게 넘길 때. reply-to는 요청한 사용자 댓글 |
+| `change` | Codex → Claude | issue, pr, rev, reply-to | 바뀐 완료 조건, 이유, 바꿀 항목 | 열린 PR의 리뷰 지적이나 사용자 수정 요청(`/change`)을 계획 개정과 함께 Claude에게 넘길 때. reply-to는 워크플로의 `@codex (자동 요청)` 댓글에 적힌 값 |
 | `objection` | Claude → Codex | issue | 문제 항목, 근거, 제안 | 계획이나 지적이 틀렸다고 판단할 때 |
-| `report` | Claude → Codex | issue, pr, head | 결과, 실행한 검사 | 검토 반영이나 change 수정을 커밋한 뒤. 결과는 항목별 `고침:` 또는 `이견:`. change를 처리했으면 reply-to에 change 댓글 ID |
+| `report` | Claude → Codex | issue, pr, head | 결과, 실행한 검사 | change나 CI 실패 수정을 커밋한 뒤. 결과는 항목별 `고침:` 또는 `이견:`. change를 처리했으면 reply-to에 change 댓글 ID |
 
 Codex는 사용자 대화에서 사용자 계정으로 댓글을 달기도 하므로, Codex가 보내는 종류(`plan`, `start`, `plan-rev`, `change`)는 사용자 계정이 보낸 것도 인정한다.
 
