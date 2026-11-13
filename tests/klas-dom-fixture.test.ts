@@ -4,6 +4,7 @@ import { parseHTML } from 'linkedom';
 import { describe, expect, it } from 'vitest';
 import {
   findDomLeaks,
+  findInfoLeaks,
   PAGE_NAME_PATTERN,
   parseDomFixture,
 } from '../scripts/fixtures/anonymize-dom.ts';
@@ -28,6 +29,7 @@ describe('tests/fixtures/klas/dom', () => {
         expect(PAGE_NAME_PATTERN.test(parsed!.info.page)).toBe(true);
         expect(`${parsed!.info.page}.html`).toBe(name);
         expect(parsed!.info.path).not.toContain('?');
+        expect(findInfoLeaks(parsed!.info)).toEqual([]);
       });
 
       it('학번, 한글(남길 낱말 제외), 전화번호, 이메일이 없다', () => {

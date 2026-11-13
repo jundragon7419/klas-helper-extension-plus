@@ -53,14 +53,17 @@ export interface DomAnonymizeResult {
   html: string;
   /** 결과에 남은 개인정보 형식. 비어 있어야 한다. */
   leaks: string[];
-  /** 자리표시값으로 바꾼 한글 낱말. keepText 후보를 고를 때 콘솔에서 본다. 파일에 넣지 않는다. */
-  replacedWords: string[];
+  /** 서로 다른 자리표시값 수. 원문은 콘솔에도 내지 않는다. */
+  replacedCount: number;
 }
 
 class DomReplacer {
   private readonly table = new Map<string, string>();
   readonly originals = new Set<string>();
-  readonly words = new Set<string>();
+
+  get size(): number {
+    return this.table.size;
+  }
 
   constructor(private readonly keep: Set<string>) {}
 
@@ -111,9 +114,7 @@ class DomReplacer {
   private mustReplace(m: RegExpMatchArray): boolean {
     const [, hangul, latin, digits, other] = m;
     if (hangul) {
-      if (this.keep.has(hangul)) return false;
-      this.words.add(hangul);
-      return true;
+      return !this.keep.has(hangul);
     }
     // 상태 코드(lesson, ON, Q 등)는 남긴다. 대소문자가 섞인 낱말은 이름일 수 있다.
     if (latin) return !/^([a-z]{2,10}|[A-Z]{1,3})$/.test(latin);
@@ -133,43 +134,91 @@ class DomReplacer {
   }
 }
 
-/** 텍스트나 속성 값 하나에 남은 개인정보 형식을 찾는다. 자리표시값과 keepText 낱말은 빼고 본다. */
+/**
+ * 텍스트나 속성 값 하나에 남은 개인정보 형식의 종류를 찾는다. 자리표시값과 keepText 낱말은 빼고 본다.
+ * 결과는 콘솔과 CI 기록에 나오므로 원문 값은 넣지 않는다.
+ */
 export function findValueLeaks(value: string, keep: Iterable<string>): string[] {
   const keepSet = new Set(keep);
   const rest = value
     .replace(PLACEHOLDER_PATTERN, ' ')
     .replace(/\p{Script=Hangul}+/gu, (word) => (keepSet.has(word) ? ' ' : word));
   const leaks: string[] = [];
-  const number = STUDENT_NUMBER_PATTERN.exec(rest);
-  if (number) leaks.push(`학번 형식: ${number[0]}`);
-  const hangul = HANGUL_WORD_PATTERN.exec(rest);
-  if (hangul) leaks.push(`한글: ${hangul[0]}`);
-  const phone = PHONE_PATTERN.exec(rest);
-  if (phone) leaks.push(`전화번호 형식: ${phone[0]}`);
-  const email = EMAIL_PATTERN.exec(rest);
-  if (email) leaks.push(`이메일 형식: ${email[0]}`);
+  if (STUDENT_NUMBER_PATTERN.test(rest)) leaks.push('학번 형식');
+  if (HANGUL_WORD_PATTERN.test(rest)) leaks.push('한글');
+  if (PHONE_PATTERN.test(rest)) leaks.push('전화번호 형식');
+  if (EMAIL_PATTERN.test(rest)) leaks.push('이메일 형식');
   return leaks;
 }
 
-/** 요소 아래의 텍스트와 속성 값을 모두 모은다. */
-function values(node: Node, out: string[] = []): string[] {
-  if (node.nodeType === 3) out.push(node.nodeValue ?? '');
-  if (node.nodeType === 8) out.push(node.nodeValue ?? '');
+/** template의 내용은 childNodes가 아니라 content에 있으므로 함께 돈다. */
+function childrenOf(node: Node): Node[] {
+  const children = [...node.childNodes];
+  const content = (node as Partial<HTMLTemplateElement>).content;
+  if (node.nodeType === 1 && content) children.push(...content.childNodes);
+  return children;
+}
+
+/**
+ * 요소 아래의 텍스트와 속성 값을 위치와 함께 모은다.
+ * 위치는 태그 이름과 순서(`div > table:nth-child(2)`)로만 적는다. id나 class 값에도 개인정보가 남을 수 있어 쓰지 않는다.
+ */
+function values(node: Node, where: string, out: { value: string; where: string }[] = []) {
+  if (node.nodeType === 3 || node.nodeType === 8) out.push({ value: node.nodeValue ?? '', where });
   if (node.nodeType === 1) {
-    for (const attr of [...(node as Element).attributes]) out.push(attr.value);
+    for (const attr of [...(node as Element).attributes]) {
+      out.push({ value: attr.value, where: `${where} @${attr.name}` });
+    }
   }
-  for (const child of [...node.childNodes]) values(child, out);
+  let index = 0;
+  for (const child of childrenOf(node)) {
+    if (child.nodeType === 1) {
+      index += 1;
+      const tag = (child as Element).localName;
+      values(child, where ? `${where} > ${tag}:nth-child(${index})` : tag, out);
+    } else {
+      values(child, where || '(최상위)', out);
+    }
+  }
   return out;
 }
 
-/** 요소 아래에 남은 개인정보 형식을 찾는다. 같은 값은 한 번만 적는다. */
+/**
+ * 요소 아래에 남은 개인정보 형식을 찾는다. `종류 (위치)` 모양이고 원문 값은 넣지 않는다.
+ * 같은 항목은 한 번만 적는다.
+ */
 export function findDomLeaks(root: Node, keep: Iterable<string>): string[] {
   const keepList = [...keep];
-  return [...new Set(values(root).flatMap((value) => findValueLeaks(value, keepList)))];
+  return [
+    ...new Set(
+      values(root, '').flatMap(({ value, where }) =>
+        findValueLeaks(value, keepList).map((kind) => `${kind} (${where})`),
+      ),
+    ),
+  ];
+}
+
+/**
+ * 정보 줄에 남은 개인정보 형식을 찾는다. 선택자와 경로는 사용자가 정한 값이라 익명화하지 않으므로 검사만 한다.
+ * 남길 낱말은 한글이라 한글 검사는 하지 않지만 학번, 전화번호, 이메일 형식은 막는다.
+ */
+export function findInfoLeaks(info: DomFixtureInfo): string[] {
+  const keep = info.keepText;
+  const leaks: string[] = [];
+  for (const [field, value] of [
+    ['page', info.page],
+    ['path', info.path],
+    ['selector', info.selector],
+    ['collectedOn', info.collectedOn],
+    ...keep.map((word) => ['keepText', word] as const),
+  ] as const) {
+    for (const kind of findValueLeaks(value, keep)) leaks.push(`${kind} (정보 줄 ${field})`);
+  }
+  return [...new Set(leaks)];
 }
 
 function walk(node: Node, r: DomReplacer): void {
-  for (const child of [...node.childNodes]) {
+  for (const child of childrenOf(node)) {
     if (child.nodeType === 8) {
       child.parentNode?.removeChild(child);
     } else if (child.nodeType === 3) {
@@ -203,9 +252,12 @@ export function anonymizeDom(root: Element, keepText: string[] = []): DomAnonymi
   const leaks = findDomLeaks(wrapper, keepText);
   // 바꾼 원본이 다른 자리(속성 값 일부 등)에 그대로 남았는지도 본다.
   for (const original of r.originals) {
-    if (original.trim().length >= 3 && html.includes(original)) leaks.push(`원본 값: ${original}`);
+    if (original.trim().length >= 3 && html.includes(original)) {
+      leaks.push('바꾼 원본 값이 다른 자리에 남음');
+      break;
+    }
   }
-  return { html, leaks, replacedWords: [...r.words].filter((w) => !keepText.includes(w)) };
+  return { html, leaks, replacedCount: r.size };
 }
 
 /** 정보 줄을 만든다. JSON 안의 `--`는 주석을 끝내지 않도록 이스케이프한다. */

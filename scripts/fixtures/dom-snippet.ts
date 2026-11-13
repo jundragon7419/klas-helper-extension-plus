@@ -4,14 +4,14 @@
 
 import {
   anonymizeDom,
+  findInfoLeaks,
   formatDomFixture,
   PAGE_NAME_PATTERN,
-  type DomAnonymizeResult,
 } from './anonymize-dom.ts';
 
 declare global {
   interface Window {
-    klasDom?: (selector: string, page: string, keepText?: string[]) => DomAnonymizeResult | null;
+    klasDom?: (selector: string, page: string, keepText?: string[]) => string[] | null;
   }
 }
 
@@ -50,19 +50,19 @@ window.klasDom = (selector, page, keepText = []) => {
   if (matches.length > 1) {
     console.warn(`${tag} 맞는 요소가 ${matches.length}개라 첫 번째만 발췌합니다.`);
   }
+  // 콘솔에는 원문을 내지 않는다. 남은 항목은 종류와 위치만 보여 주고, 결과도 그 목록만 돌려준다.
   const result = anonymizeDom(root, keepText);
-  console.log(
-    `${tag} 자리표시값으로 바꾼 한글 낱말(남길 화면 이름표가 있으면 세 번째 인자에 넣으세요)`,
-    result.replacedWords,
-  );
-  if (result.leaks.length > 0) {
-    console.error(`${tag} 개인정보 형식이 남아 있어 파일을 만들지 않았습니다.`, result.leaks);
-    return result;
-  }
   const info = { page, path: location.pathname, selector, collectedOn: today(), keepText };
+  const leaks = [...result.leaks, ...findInfoLeaks(info)];
+  if (leaks.length > 0) {
+    console.error(`${tag} 개인정보 형식이 남아 있어 파일을 만들지 않았습니다.`, leaks);
+    return leaks;
+  }
   download(`${page}.html`, formatDomFixture(info, result.html));
-  console.log(`${tag} ${page}.html을 내려받았습니다. tests/fixtures/klas/dom/에 넣으세요.`);
-  return result;
+  console.log(
+    `${tag} ${page}.html을 내려받았습니다(자리표시값 ${result.replacedCount}개). 파일을 열어 남길 화면 이름표가 텍스트N으로 바뀌었는지 보고, 그렇다면 세 번째 인자에 더해 다시 실행하세요. 다 됐으면 tests/fixtures/klas/dom/에 넣으세요.`,
+  );
+  return [];
 };
 
 console.log(

@@ -2,6 +2,7 @@ import { parseHTML } from 'linkedom';
 import { describe, expect, it } from 'vitest';
 import {
   anonymizeDom,
+  findInfoLeaks,
   findValueLeaks,
   formatDomFixture,
   parseDomFixture,
@@ -127,17 +128,41 @@ describe('anonymizeDom', () => {
     expect(r.leaks).toEqual([]);
     // 남길 낱말은 사용자 책임이지만 학번 형식은 막는다.
     const number = load('<div id="r" class="s-2023203999">x</div>').querySelector('#r')!;
-    expect(anonymizeDom(number).leaks).toContain('학번 형식: 2023203999');
+    expect(anonymizeDom(number).leaks).toContain('학번 형식 (div @class)');
   });
 
   it('바꾸지 않는 속성(class, id)에 남은 한글도 leaks로 알린다', () => {
-    const el = load('<div id="r"><span class="홍길동">x</span></div>').querySelector('#r')!;
-    expect(anonymizeDom(el).leaks).toContain('한글: 홍길동');
+    const el = load('<div id="r"><b></b><span class="홍길동">x</span></div>').querySelector('#r')!;
+    expect(anonymizeDom(el).leaks).toEqual(['한글 (div > span:nth-child(2) @class)']);
   });
 
-  it('자리표시값으로 바꾼 한글 낱말을 후보로 돌려준다', () => {
+  it('남은 항목에는 원문 값을 넣지 않는다', () => {
+    const el = load('<div id="r"><span class="홍길동 a-2023203999">x</span></div>').querySelector(
+      '#r',
+    )!;
+    const { leaks } = anonymizeDom(el);
+    expect(leaks.length).toBeGreaterThan(0);
+    for (const leak of leaks) {
+      expect(leak).not.toContain('홍길동');
+      expect(leak).not.toContain('2023203999');
+    }
+  });
+
+  it('template 안의 내용도 바꾼다', () => {
+    const el = load(
+      '<div id="r"><template><p class="row">홍길동 2023203999</p></template></div>',
+    ).querySelector('#r')!;
+    const { html, leaks } = anonymizeDom(el);
+    expect(html).not.toContain('홍길동');
+    expect(html).not.toContain('2023203999');
+    expect(html).toContain('<template><p class="row">텍스트1</p></template>');
+    expect(leaks).toEqual([]);
+  });
+
+  it('자리표시값 수를 돌려주고 원문 목록은 돌려주지 않는다', () => {
     const r = anonymizeDom(load().querySelector('thead')!, ['주차']);
-    expect(r.replacedWords).toEqual(['학습단원', '구분', '학습목차', '학습기간', '학습시간']);
+    expect(r.replacedCount).toBe(5);
+    expect(JSON.stringify(Object.keys(r).sort())).toBe('["html","leaks","replacedCount"]');
   });
 });
 
@@ -147,14 +172,46 @@ describe('findValueLeaks', () => {
   });
 
   it('학번, 한글, 전화번호, 이메일을 찾는다', () => {
-    expect(findValueLeaks('2023203999', [])).toEqual(['학번 형식: 2023203999']);
-    expect(findValueLeaks('홍길동', [])).toEqual(['한글: 홍길동']);
-    expect(findValueLeaks('02-940-5000', [])).toEqual(['전화번호 형식: 02-940-5000']);
-    expect(findValueLeaks('a.b@kw.ac.kr', [])).toEqual(['이메일 형식: a.b@kw.ac.kr']);
+    expect(findValueLeaks('2023203999', [])).toEqual(['학번 형식']);
+    expect(findValueLeaks('홍길동', [])).toEqual(['한글']);
+    expect(findValueLeaks('02-940-5000', [])).toEqual(['전화번호 형식']);
+    expect(findValueLeaks('a.b@kw.ac.kr', [])).toEqual(['이메일 형식']);
   });
 
   it('날짜와 시각은 전화번호로 보지 않는다', () => {
     expect(findValueLeaks('2026-10-01 12:00 ~ 2026-10-05 23:59 202610052359', [])).toEqual([]);
+  });
+});
+
+describe('findInfoLeaks', () => {
+  const info = {
+    page: 'online-lectures',
+    path: '/std/lis/evltn/OnlineCntntsStdPage.do',
+    selector: '.tablelistbox',
+    collectedOn: '2026-11-13',
+    keepText: ['주차'],
+  };
+
+  it('정상 정보 줄은 통과시킨다', () => {
+    expect(findInfoLeaks(info)).toEqual([]);
+  });
+
+  it('선택자와 경로의 학번, 한글, 연락처를 찾는다', () => {
+    expect(findInfoLeaks({ ...info, selector: 'input[value="2023203999"]' })).toEqual([
+      '학번 형식 (정보 줄 selector)',
+    ]);
+    expect(findInfoLeaks({ ...info, selector: 'td[title="홍길동"]' })).toEqual([
+      '한글 (정보 줄 selector)',
+    ]);
+    expect(findInfoLeaks({ ...info, path: '/a/hong@example.com' })).toEqual([
+      '이메일 형식 (정보 줄 path)',
+    ]);
+  });
+
+  it('남길 낱말의 학번 형식도 막는다', () => {
+    expect(findInfoLeaks({ ...info, keepText: ['주차', '2023203999'] })).toEqual([
+      '학번 형식 (정보 줄 keepText)',
+    ]);
   });
 });
 
