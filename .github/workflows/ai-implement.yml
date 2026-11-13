@@ -1,6 +1,6 @@
 # 메인테이너가 이슈에 "@claude" 댓글을 달면 Claude가 구현하고 develop으로 PR을 연다.
 # Claude가 ask로 멈춘 뒤 Codex가 answer(재시작: 예)로 답하면 ai-relay 워크플로가 workflow_dispatch로 다시 부른다.
-# 흐름 전체는 docs/AI-COLLABORATION.md "자동 흐름"을 따른다.
+# 흐름 전체는 docs/AI-COLLABORATION.md "흐름"의 1~3을 따른다.
 name: AI implement
 
 on:

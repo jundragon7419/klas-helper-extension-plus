@@ -37,7 +37,8 @@ export const MESSAGE_TYPES = {
     from: ['codex', 'maintainer'],
     to: 'claude',
     mention: '@claude',
-    header: ['issue', 'rev', 'reply-to'],
+    // 승인은 Codex 대화에서 받기도 하므로 근거 댓글(reply-to)은 있으면 적는다.
+    header: ['issue', 'rev'],
     fields: ['승인'],
   },
   ask: {

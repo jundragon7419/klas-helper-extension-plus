@@ -310,7 +310,7 @@ describe.skipIf(!hasBash)('request-codex.sh', () => {
   });
 });
 
-// request-review.sh: 검토 반영이 push됐을 때만 메인테이너 계정으로 "@codex review"를 단다.
+// request-review.sh: 검토 반영이 push됐고 Codex 자동 검토가 시작되지 않았을 때만 메인테이너 계정으로 "@codex review"를 단다.
 describe.skipIf(!hasBash)('request-review.sh', () => {
   let root: string;
   let calls: string;
@@ -329,6 +329,9 @@ describe.skipIf(!hasBash)('request-review.sh', () => {
         NOW_SHA: 'b'.repeat(40),
         GH_TOKEN: 'maintainer-token',
         ACTIONS_TOKEN: 'actions-token',
+        CODEX_AUTO_REVIEW_WAIT: '0',
+        CODEX_COMMENTS: '',
+        CODEX_EYES: '',
         ...env,
       },
     });
@@ -347,7 +350,16 @@ describe.skipIf(!hasBash)('request-review.sh', () => {
     mkdirSync(bin);
     writeFileSync(
       join(bin, 'gh'),
-      '#!/usr/bin/env bash\necho "[$GH_TOKEN] $*" >> "$GH_CALLS"\n[[ "$*" == *".head.sha"* ]] && echo "$NOW_SHA"\nexit 0\n',
+      [
+        '#!/usr/bin/env bash',
+        'echo "[$GH_TOKEN] $*" >> "$GH_CALLS"',
+        '[[ "$*" == *".head.sha"* ]] && echo "$NOW_SHA"',
+        // --jq 대신 미리 거른 결과를 돌려준다.
+        '[[ "$*" == *"/comments --paginate"* ]] && [ -n "$CODEX_COMMENTS" ] && echo "$CODEX_COMMENTS"',
+        '[[ "$*" == *"/reactions"* ]] && [ -n "$CODEX_EYES" ] && echo "$CODEX_EYES"',
+        'exit 0',
+        '',
+      ].join('\n'),
     );
     chmodSync(join(bin, 'gh'), 0o755);
   });
@@ -366,6 +378,29 @@ describe.skipIf(!hasBash)('request-review.sh', () => {
     );
   });
 
+  it('Codex가 새 head를 스스로 검토하기 시작했으면 요청하지 않는다', () => {
+    const state = (sha: string) =>
+      `<!-- codex-review-state:v1 {"code_review":{"commit_sha":"${sha}","status":"in_progress"}} -->`;
+    const started = run({ CODEX_COMMENTS: state('b'.repeat(40)) });
+    expect(started.status).toBe(0);
+    expect(started.stdout).toContain('스스로 검토');
+    expect(readCalls()).not.toContain('-X POST');
+
+    const eyes = run({ CODEX_EYES: '123' });
+    expect(eyes.stdout).toContain('스스로 검토');
+    expect(readCalls()).not.toContain('-X POST');
+  });
+
+  it('이전 커밋의 상태 표시만 있으면 요청한다', () => {
+    const result = run({
+      CODEX_COMMENTS: `<!-- codex-review-state:v1 {"code_review":{"commit_sha":"${'a'.repeat(40)}"}} -->`,
+    });
+    expect(result.stdout).toContain('재검토를 요청했습니다');
+    expect(readCalls()).toContain(
+      '-X POST repos/owner/repo/issues/111/comments -f body=@codex review',
+    );
+  });
+
   it('head가 그대로면 요청하지 않는다', () => {
     const result = run({ NOW_SHA: 'a'.repeat(40) });
 
@@ -378,7 +413,7 @@ describe.skipIf(!hasBash)('request-review.sh', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('MAINTAINER_PR_TOKEN');
-    expect(readCalls()).not.toContain('comments');
+    expect(readCalls()).not.toContain('-X POST');
   });
 });
 

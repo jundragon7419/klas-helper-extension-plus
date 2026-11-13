@@ -1,6 +1,6 @@
 # PR head 커밋에 머지 게이트 상태(commit status `ai-gate`)를 남긴다. develop ruleset이 이 상태를 필수 검사로 요구한다.
 # 판단 기준은 scripts/ai/merge-gate.js: 현재 커밋의 Codex 리뷰 완료, 현재 커밋에서 단 P0/P1 지적 없음,
-# CI check 통과, 자동 흐름이 진행 중이거나 멈추지 않음. 흐름 전체는 docs/AI-COLLABORATION.md "머지 게이트"를 따른다.
+# CI check와 e2e 통과, 자동 흐름이 진행 중이거나 멈추지 않음. 흐름 전체는 docs/AI-COLLABORATION.md "라벨과 머지 게이트"를 따른다.
 # 새 커밋에는 상태가 없으므로, 이 워크플로가 돌기 전까지도 머지는 막힌다.
 name: Merge gate
 
