@@ -24,7 +24,7 @@ npx playwright install chromium
 
 E2E는 로그인 없이 가짜 KLAS 화면에서 content script를 확인합니다. `klas.kw.ac.kr` 요청을 가로채 화면은 `tests/fixtures/klas/dom/`, API는 `tests/fixtures/klas/2026-2.json`으로 답합니다(`e2e/klas.ts`). 테스트마다 화면 스크린샷을 남기고, CI는 PR마다 `e2e-screenshots` artifact로 올립니다(PR의 Checks 탭 → CI 실행 → Artifacts).
 
-E2E는 Chromium 기반 브라우저(Chrome, Edge)만 대상으로 합니다. Chrome과 Edge는 확장을 명령줄로 올리는 옵션을 막아 두어서, Playwright가 내려받는 Chromium이 둘을 대표합니다. Firefox는 빌드 산출물 검사와 `npm run lint:firefox`만 자동으로 하고, 동작은 배포 전에 직접 확인합니다.
+E2E는 Chromium 기반 브라우저(Chrome, Edge)만 대상으로 합니다. Chrome과 Edge는 확장을 명령줄로 올리는 옵션을 막아 두어서, Playwright가 내려받는 Chromium이 둘을 대표합니다. Firefox는 빌드 산출물 검사와 `npm run lint:firefox`만 자동으로 하고, 동작은 배포 전에 직접 확인합니다([배포](#배포)).
 
 ### 개발 서버
 
@@ -137,6 +137,27 @@ VS Code를 쓰면 저장소를 열 때 ESLint와 Prettier 확장 설치를 권�
 PR 본문에는 브랜치의 이슈 번호와 같은 `Closes #이슈 번호`를 적습니다. CI의 `check` 작업이 브랜치 이름과 이 줄을 검사하고(`scripts/ci/check-branch.js`), 어긋나면 실패합니다. `develop`을 `main`으로 합치는 배포 PR은 검사하지 않습니다.
 
 PR은 메인테이너가 "Squash and merge"로 합칩니다. PR 제목이 `develop`에 남는 커밋 메시지가 되므로, PR 제목도 [커밋 메시지](#커밋-메시지) 규칙을 따라 주세요.
+
+## 배포
+
+`develop`을 `main`으로 합치는 릴리스 PR로 배포합니다. 메인테이너가 합니다.
+
+Firefox는 자동 E2E가 없으므로 확인할 범위를 기능 PR에서 미리 표시하고, 릴리스 PR에서 직접 확인합니다.
+
+- 기능 PR: Firefox에서 다르게 동작할 수 있는 변경(content script의 KLAS 요청 방식, manifest 권한이나 사이트 권한, `browser.*` API 차이, content script 실행 시점이나 world)이면 PR 본문 "Firefox 영향"의 `릴리스 전 Firefox 확인 필요`를 체크하고 확인할 것을 적습니다. 체크하면 `Firefox label` 워크플로가 `firefox-check` 라벨을 붙입니다. 체크를 지우면 라벨도 지워집니다. Codex 리뷰는 표시가 빠진 경우를 P1로 지적합니다.
+- 릴리스 PR: 아래 순서로 엽니다.
+
+1. `develop`의 CHANGELOG.md `[Unreleased]`를 새 버전 제목으로 바꾸고, `package.json`의 `version`을 같은 버전으로 올리는 PR을 먼저 머지합니다.
+2. 릴리스 PR 양식으로 PR을 엽니다. 이 주소는 양식이 채워진 본문으로 열립니다.
+
+   ```text
+   https://github.com/jundragon7419/klas-helper-extension-plus/compare/main...develop?quick_pull=1&template=release.md
+   ```
+
+   GitHub의 PR 화면은 기본 양식만 보여 주므로, 릴리스 PR은 이 주소로 열어야 Firefox 확인 목록이 나옵니다. 양식 파일은 `.github/PULL_REQUEST_TEMPLATE/release.md`입니다.
+3. 양식의 배포 전 검사와 Firefox 확인 목록을 채웁니다. `firefox-check` 라벨이 붙은 PR은 양식의 링크로 모아 각 PR의 확인할 것을 Firefox에서 확인합니다.
+4. CI `check`가 통과하면 "Create a merge commit"으로 합칩니다(`main` ruleset이 merge만 허용합니다). 확인한 PR의 `firefox-check` 라벨을 지웁니다.
+5. `main`에 `v<버전>` 태그를 만들고, 그 커밋에서 빌드한 Chrome, Firefox ZIP을 GitHub 릴리스에 첨부합니다.
 
 ## 커밋 메시지
 
