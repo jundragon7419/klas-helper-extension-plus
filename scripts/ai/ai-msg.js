@@ -190,7 +190,25 @@ function locateHeader(lines) {
   return { status: 'none' };
 }
 
-const splitLines = (body) => (body ?? '').replace(/\r\n/g, '\n').split('\n');
+/** Codex가 작업 결과 끝에 붙이는 작업 링크 줄. 예: ` [View task →](https://chatgpt.com/s/cd_...)` */
+const TASK_LINK = /^\s*\[View task →\]\(https:\/\/chatgpt\.com\/[^)\s]*\)\s*$/;
+
+/**
+ * 본문을 줄로 나눈다. 끝의 Codex 작업 링크 줄과 그 앞뒤 빈 줄은 메시지가 아니므로 뗀다.
+ * 떼지 않으면 마지막 절의 내용으로 읽혀 `### 재시작` 같은 값 검사가 실패한다(#145).
+ */
+const splitLines = (body) => {
+  const lines = (body ?? '').replace(/\r\n/g, '\n').split('\n');
+  const blankTail = () => {
+    while (lines.length > 0 && lines.at(-1).trim() === '') lines.pop();
+  };
+  blankTail();
+  if (lines.length > 0 && TASK_LINK.test(lines.at(-1))) {
+    lines.pop();
+    blankTail();
+  }
+  return lines;
+};
 
 /**
  * 댓글 본문에서 메시지를 읽는다. 메시지가 아니거나 표시 줄이 틀리면 null.

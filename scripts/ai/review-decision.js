@@ -22,13 +22,20 @@ export function isAiMessage(body) {
 // Codex 작업 결과 댓글(`View task →` 링크가 있는 일반 댓글)의 두 모양.
 // 리뷰 결과: "## 검토 결과" 아래 `[P1]` 같은 지적이나 "문제를 발견하지 못했습니다"(PR #128, #129).
 // 코드 수정: "### Summary" 아래 변경 내용과 "커밋했습니다", make_pr(PR #126, #135). 리뷰가 아니라 Codex가 고칠 문제를 찾았다는 뜻이다.
+// 코드 수정은 문구 하나하나 대신 넓은 기준으로 본다(#145에서 "커밋으로 저장했습니다"를 놓침).
+// 커밋 SHA(백틱 안 7~40자리 16진수)와 커밋했다는 말이 함께 있거나, PR을 만들었다는 말이 있거나, make_pr.
+// 리뷰 결과도 "현재 head 커밋 `0c8f02e` 기준"처럼 SHA를 쓰므로 "커밋"이라는 낱말만으로는 보지 않는다.
+const COMMIT_SHA = /`[0-9a-f]{7,40}`/;
+const COMMIT_WORD =
+  /커밋(했|하였|으로 (저장|남|만들)|을 (만들|생성|남겼))|\bcommitted\b|\bcommit(ted)? (the |my )?changes?\b/i;
 const CODE_CHANGE = [
-  /\bCommitted (the )?changes?\b/i,
-  /커밋했습니다/,
   /\bmake_pr\b/,
   /\b(follow-up )?pull request (metadata|title)/i,
-  /후속 PR/,
+  /(후속 )?(PR|Pull Request|풀 리퀘스트)(을|를)? ?(생성|만들|열)/i,
+  /\b(created?|opened?|prepared?) (a |the )?(follow-up )?(PR|pull request)\b/i,
 ];
+const isCodeChange = (body) =>
+  (COMMIT_SHA.test(body) && COMMIT_WORD.test(body)) || CODE_CHANGE.some((re) => re.test(body));
 const REVIEW_RESULT = [
   /^#{1,3}\s*검토 결과/m,
   /Codex Review/,
@@ -52,7 +59,7 @@ export function classifyCodexTask(body, head) {
   if (isAiMessage(body)) return null;
   const tags = [...body.matchAll(TASK_TAG)].map((m) => Number(m[1]));
   const counts = { findings: tags.length, blocking: tags.filter((p) => p <= 1).length };
-  if (CODE_CHANGE.some((re) => re.test(body))) return { kind: 'code-change', ...counts };
+  if (isCodeChange(body)) return { kind: 'code-change', ...counts };
   if (tags.length > 0 || REVIEW_RESULT.some((re) => re.test(body)))
     return { kind: 'review', ...counts };
   return { kind: 'other', ...counts };
