@@ -6,7 +6,8 @@
 # 필요한 환경 변수: GH_REPO, PR, BEFORE(push 전 head SHA),
 #   GH_TOKEN(MAINTAINER_PR_TOKEN, 없으면 요청하지 않음), ACTIONS_TOKEN(github.token)
 # 선택: CODEX_BOT(기본 chatgpt-codex-connector[bot]), MAINTAINER(기본 jundragon7419),
-#   CODEX_AUTO_REVIEW_WAIT(리뷰 시작을 기다릴 초, 기본 180)
+#   CODEX_AUTO_REVIEW_WAIT(리뷰 시작을 기다릴 초, 기본 180),
+#   REVIEW_SINCE(push 시각, ISO 8601. 워크플로가 synchronize 이벤트의 PR 갱신 시각을 넘긴다)
 # PR 브랜치의 파일로 실행하지 않는다. 기본 브랜치를 새로 체크아웃한 작업에서만 부른다.
 set -euo pipefail
 
@@ -21,8 +22,10 @@ fi
 
 codex_bot=${CODEX_BOT:-chatgpt-codex-connector[bot]}
 maintainer=${MAINTAINER:-jundragon7419}
-# 👀는 이전 리뷰 때 단 것이 남아 있을 수 있다. push 직후에 실행되므로, 시작 1분 전 이후에 단 것만 이번 커밋의 리뷰로 본다.
-# head 커밋 시각은 기준으로 쓰지 않는다. Claude가 커밋한 뒤 push까지 수십 분이 걸려, 그 사이의 이전 리뷰 👀를 잘못 셀 수 있다.
+# 👀는 이전 리뷰 때 단 것이 남아 있을 수 있어 push 시각(REVIEW_SINCE) 이후에 단 것만 이번 커밋의 리뷰로 본다.
+# 실행이 대기열에서 늦게 시작하면 "지금부터 1분 전"으로는 그 사이에 달린 👀나 @codex review를 놓친다(#144).
+# REVIEW_SINCE가 없을 때(직접 실행)만 시작 1분 전을 쓴다.
+# head 커밋 시각은 기준으로 쓰지 않는다. 커밋한 뒤 push까지 오래 걸리면 그 사이의 이전 리뷰 👀를 잘못 셀 수 있다.
 since=${REVIEW_SINCE:-$(date -u -d '-60 seconds' +%Y-%m-%dT%H:%M:%SZ)}
 # 리뷰가 시작됐는지: 요약 댓글의 상태 표시가 새 head를 가리키거나, Codex가 PR에 👀(리뷰 중)를 달았거나,
 # push 뒤에 메인테이너가 "@codex review"를 이미 달았다.

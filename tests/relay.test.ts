@@ -445,6 +445,12 @@ describe.skipIf(!hasBash || !hasJq)('request-review.sh', () => {
     );
   });
 
+  it('워크플로는 push 시각을 기준 시각으로 넘긴다', () => {
+    const workflow = readFileSync('.github/workflows/codex-review-request.yml', 'utf8');
+    expect(workflow).toContain('REVIEW_SINCE: ${{ github.event.pull_request.updated_at }}');
+    expect(workflow).toContain('run: bash scripts/ai/request-review.sh');
+  });
+
   it('head가 그대로면 요청하지 않는다', () => {
     const result = run({ NOW_SHA: 'a'.repeat(40) });
 
