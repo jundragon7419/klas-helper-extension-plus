@@ -110,24 +110,128 @@ describe('summarizeChecks', () => {
   });
 });
 
+const ME = 'jundragon7419';
+const inline = (level = 1, title = '진도율 셀을 잘못 읽음', commit = HEAD, id = 300) => ({
+  id,
+  login: CODEX,
+  path: 'utils/progress.ts',
+  line: 12,
+  url: `https://x/#discussion_r${id}`,
+  originalCommitId: commit,
+  body: `**<sub><sub>![P${level} Badge](https://img.shields.io/badge/P${level}-orange)</sub></sub>  ${title}**\n\n설명`,
+});
+const triage = (head: string, findings: { level: number; title: string }[], id = 400) => ({
+  id,
+  login: ME,
+  body: `@codex (자동 요청)\n<!-- ai-review-triage:v1 ${JSON.stringify({
+    head,
+    findings: findings.map((f) => ({ ...f, path: 'utils/progress.ts' })),
+  })} -->`,
+});
+const codexChange = (replyTo: number, id = 410) => ({
+  id,
+  login: CODEX,
+  body: `@claude\n<!-- ai-msg:v1 type=change issue=148 pr=150 head=- rev=1 reply-to=${replyTo} -->\n\n### 바뀐 완료 조건\n\n- 전: a\n- 후: a\n\n### 이유\n\nP2는 넘김\n\n### 바꿀 항목\n\n- 없음`,
+});
+
 describe('decideReview', () => {
-  it('현재 head에 줄 단위 지적이 있으면 고친다', () => {
-    const d = decideReview(
-      input({ reviews: [review()], comments: [state(HEAD, 'completed', true)] }),
-    );
-    expect(d).toMatchObject({
-      action: 'fix',
-      task: 'review-9',
-      round: 1,
-      addLabels: ['ai:round-1'],
+  const reviewed = (over: Partial<ReviewInput> = {}) =>
+    input({
+      maintainer: ME,
+      reviews: [review()],
+      comments: [state(HEAD, 'completed', true)],
+      ...over,
     });
+
+  it('현재 커밋 리뷰에 지적이 있으면 Codex에게 정리를 요청한다', () => {
+    const d = decideReview(reviewed({ inlineComments: [inline()] }));
+    expect(d).toMatchObject({ action: 'triage', addLabels: [], removeLabels: [] });
+    expect(d.findings).toEqual([
+      expect.objectContaining({
+        level: 1,
+        path: 'utils/progress.ts',
+        title: '진도율 셀을 잘못 읽음',
+      }),
+    ]);
   });
 
-  it('이전 커밋의 지적은 무시한다', () => {
+  it('이전 커밋의 줄 단위 지적은 넘기지 않는다', () => {
     const d = decideReview(
-      input({ reviews: [review({ commitId: OLD })], comments: [state(OLD, 'completed', true)] }),
+      input({
+        maintainer: ME,
+        reviews: [review()],
+        comments: [state(HEAD)],
+        inlineComments: [inline(1, 'x', OLD)],
+      }),
+    );
+    expect(d.action).toBe('ready');
+  });
+
+  it('이미 정리를 요청한 커밋이면 기다린다', () => {
+    const d = decideReview(
+      reviewed({
+        inlineComments: [inline()],
+        comments: [state(HEAD, 'completed', true), triage(HEAD, [{ level: 1, title: 'a' }])],
+      }),
     );
     expect(d.action).toBe('none');
+  });
+
+  it('앞 회차에서 넘긴 지적이 다시 나오면 멈춘다', () => {
+    const d = decideReview(
+      reviewed({
+        labels: ['ai:ready'],
+        inlineComments: [inline()],
+        comments: [
+          state(HEAD, 'completed', true),
+          triage(OLD, [{ level: 1, title: '진도율 셀을 잘못 읽음' }]),
+        ],
+      }),
+    );
+    expect(d).toMatchObject({
+      action: 'halt',
+      reason: 'finding repeated',
+      addLabels: ['ai:needs-human', 'ai:in-progress'],
+      removeLabels: ['ai:ready'],
+    });
+    expect(d.message).toContain('[P1] 진도율 셀을 잘못 읽음');
+  });
+
+  it('정리 요청 횟수를 넘으면 멈춘다', () => {
+    const old = [1, 2, 3].map((i) =>
+      triage(String(i).repeat(40), [{ level: 2, title: `t${i}` }], 400 + i),
+    );
+    const d = decideReview(
+      reviewed({ inlineComments: [inline()], comments: [state(HEAD, 'completed', true), ...old] }),
+    );
+    expect(d).toMatchObject({ action: 'halt', reason: 'triage limit' });
+  });
+
+  it('다른 계정이 단 정리 요청 표시는 세지 않는다', () => {
+    const fake = { ...triage(HEAD, [{ level: 1, title: 'a' }]), login: 'someone' };
+    const d = decideReview(
+      reviewed({ inlineComments: [inline()], comments: [state(HEAD, 'completed', true), fake] }),
+    );
+    expect(d.action).toBe('triage');
+  });
+
+  it('바꿀 항목 없이 P2만 넘긴 정리를 Claude가 처리하면 ready', () => {
+    const tr = triage(HEAD, [{ level: 2, title: 'a' }]);
+    const ch = codexChange(tr.id);
+    const done = { login: CLAUDE, body: `report\n<!-- ai-handled:change-${ch.id} -->` };
+    const comments = [state(HEAD, 'completed', true), tr, ch];
+    expect(decideReview(reviewed({ inlineComments: [inline(2, 'a')], comments })).action).toBe(
+      'none',
+    );
+    expect(
+      decideReview(reviewed({ inlineComments: [inline(2, 'a')], comments: [...comments, done] }))
+        .action,
+    ).toBe('ready');
+    // P0/P1이 남았는데 커밋이 그대로면 멈춘다.
+    expect(
+      decideReview(reviewed({ inlineComments: [inline(1, 'a')], comments: [...comments, done] }))
+        .action,
+    ).toBe('halt');
   });
 
   it('한국어 본문만 있고 줄 단위 지적이 없는 리뷰는 지적이 아니다', () => {
@@ -165,34 +269,25 @@ describe('decideReview', () => {
     expect(decideReview(input({ comments: [state(HEAD, 'completed', true)] })).action).toBe('none');
   });
 
-  it('CI가 실패하면 고친다', () => {
-    const d = decideReview(
-      input({
-        comments: [state(HEAD)],
-        checkRuns: [{ status: 'completed', conclusion: 'failure' }],
-      }),
-    );
+  it('CI가 실패하면 고치고, 고친 뒤에도 두 번 연속 실패하면 멈춘다', () => {
+    const failed = [{ status: 'completed', conclusion: 'failure' }];
+    const d = decideReview(input({ comments: [state(HEAD)], checkRuns: failed }));
     expect(d).toMatchObject({ action: 'fix', task: `ci-${HEAD}` });
-  });
-
-  it('Claude가 처리 표시를 남긴 지적은 다시 고치지 않는다', () => {
-    const d = decideReview(
-      input({
-        reviews: [review()],
-        comments: [{ login: CLAUDE, body: '이견: ...\n<!-- ai-handled:review-9 -->' }],
-      }),
-    );
-    expect(d.action).toBe('none');
-  });
-
-  it('다른 계정이 단 처리 표시는 인정하지 않는다', () => {
-    const d = decideReview(
-      input({
-        reviews: [review()],
-        comments: [{ login: 'someone', body: '<!-- ai-handled:review-9 -->' }],
-      }),
-    );
-    expect(d.action).toBe('fix');
+    expect(
+      decideReview(
+        input({
+          comments: [state(HEAD), { login: CLAUDE, body: `<!-- ai-handled:ci-${HEAD} -->` }],
+          checkRuns: failed,
+        }),
+      ).action,
+    ).toBe('none');
+    const twice = ['c', 'd'].map((x) => ({
+      login: CLAUDE,
+      body: `<!-- ai-handled:ci-${x.repeat(40)} -->`,
+    }));
+    expect(
+      decideReview(input({ comments: [state(HEAD), ...twice], checkRuns: failed })).action,
+    ).toBe('halt');
   });
 
   it('다른 계정이 쓴 상태 표시로는 ready가 되지 않는다', () => {
@@ -200,12 +295,11 @@ describe('decideReview', () => {
     expect(d.action).toBe('none');
   });
 
-  it('ready 뒤에 지적이 오면 in-progress로 되돌리고 고친다', () => {
-    const d = decideReview(input({ labels: ['ai:ready', 'ai:round-1'], reviews: [review()] }));
+  it('ready 뒤에 지적이 오면 in-progress로 되돌리고 정리를 요청한다', () => {
+    const d = decideReview(reviewed({ labels: ['ai:ready'], inlineComments: [inline()] }));
     expect(d).toMatchObject({
-      action: 'fix',
-      round: 2,
-      addLabels: ['ai:in-progress', 'ai:round-2'],
+      action: 'triage',
+      addLabels: ['ai:in-progress'],
       removeLabels: ['ai:ready'],
     });
   });
@@ -214,30 +308,6 @@ describe('decideReview', () => {
     expect(decideReview(input({ labels: ['ai:ready'], comments: [state(HEAD)] })).action).toBe(
       'none',
     );
-  });
-
-  it('세 번 고친 뒤에도 지적이 남으면 멈춘다', () => {
-    const d = decideReview(
-      input({
-        labels: ['ai:in-progress', 'ai:round-1', 'ai:round-2', 'ai:round-3'],
-        reviews: [review()],
-      }),
-    );
-    expect(d).toMatchObject({ action: 'stop', addLabels: ['ai:needs-human'] });
-  });
-
-  it('ready에서 회차 제한으로 멈추면 in-progress로 되돌린다', () => {
-    const d = decideReview(
-      input({
-        labels: ['ai:ready', 'ai:round-1', 'ai:round-2', 'ai:round-3'],
-        reviews: [review()],
-      }),
-    );
-    expect(d).toMatchObject({
-      action: 'stop',
-      addLabels: ['ai:needs-human', 'ai:in-progress'],
-      removeLabels: ['ai:ready'],
-    });
   });
 
   it('멈춘 PR, 자동 흐름이 아닌 PR, 닫힌 PR, 다른 저장소 PR은 판단하지 않는다', () => {
@@ -337,17 +407,12 @@ describe('decideReview와 Codex 작업 결과', () => {
     expect(d.action).toBe('ready');
   });
 
-  it('작업 결과 리뷰에 지적이 있으면 그 댓글을 고칠 대상으로 삼는다', () => {
+  it('작업 결과 리뷰의 [P0]~[P3]도 정리 요청에 넘긴다', () => {
     const d = decideReview(
-      input({ comments: [at(reviewWithP1(HEAD), '2026-11-13T02:00:00Z', 60)] }),
+      input({ maintainer: ME, comments: [at(reviewWithP1(HEAD), '2026-11-13T02:00:00Z', 60)] }),
     );
-    expect(d).toMatchObject({ action: 'fix', task: 'task-60', round: 1 });
-    const handled = { login: CLAUDE, body: 'report\n<!-- ai-handled:task-60 -->' };
-    expect(
-      decideReview(
-        input({ comments: [at(reviewWithP1(HEAD), '2026-11-13T02:00:00Z', 60), handled] }),
-      ).action,
-    ).toBe('none');
+    expect(d.action).toBe('triage');
+    expect(d.findings?.[0]).toMatchObject({ level: 1 });
   });
 
   it('지적 없는 작업 결과 리뷰와 CI 통과면 준비 완료', () => {

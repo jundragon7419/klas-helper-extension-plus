@@ -3,9 +3,21 @@
 // GitHub API 호출은 워크플로가 하고, 이 파일은 모은 댓글로 판단만 한다. tests/change.test.ts가 검사한다.
 
 import { validateMessage } from './ai-msg.js';
+import { MAX_TRIAGES, TRIAGE_TAG } from './codex-requests.js';
 
-/** PR 하나에서 실행할 수 있는 change 수. */
+/** PR 하나에서 사용자 수정 요청으로 실행할 수 있는 change 수. 리뷰 정리로 실행하는 change는 MAX_TRIAGES로 따로 센다. */
 export const MAX_CHANGES = 3;
+
+/**
+ * change가 무엇에 대한 답인지. 근거 댓글이 리뷰 정리 요청(TRIAGE_TAG)이면 review, 아니면 사용자 수정 요청(user).
+ * @param {{id: number, body: string}[]} comments
+ * @param {number} replyTo
+ */
+export function changeSource(comments, replyTo) {
+  const request = comments.find((c) => c.id === replyTo);
+  return request?.body.includes(`<!-- ${TRIAGE_TAG}`) ? 'review' : 'user';
+}
+const limitOf = (source) => (source === 'review' ? MAX_TRIAGES : MAX_CHANGES);
 
 const CHANGE_HEADER_RE = /<!--\s*ai-msg:\S*\s+type=change\b/i;
 
@@ -14,7 +26,8 @@ const CHANGE_HEADER_RE = /<!--\s*ai-msg:\S*\s+type=change\b/i;
  * 형식이 맞고 보낼 수 있는 계정이 보낸 것 중 다음만 센다. 실행하지 않은 change가 계획이나 횟수에 들어가지 않게 한다.
  * - plan-rev: 이슈 스레드에 있고, issue 값이 이 이슈이고, reply-to가 이슈에 먼저 달린 메인테이너 댓글
  * - change: PR 스레드에 있고, issue와 pr 값이 맞고, reply-to가 PR에 먼저 달린 메인테이너 댓글이고,
- *   rev가 앞서 받아들인 change보다 크고 그 전에 달린 plan-rev보다 작지 않고, PR당 MAX_CHANGES회 안
+ *   rev가 앞서 받아들인 change보다 크고 그 전에 달린 plan-rev보다 작지 않고,
+ *   PR당 근거별 횟수 안(사용자 수정 요청 MAX_CHANGES, 리뷰 정리 MAX_TRIAGES)
  * @param {{issue: number, pr?: number | null, issueComments: {id: number, login: string, body: string}[], prComments?: {id: number, login: string, body: string}[], roles: import('./relay.js').Roles}} input
  */
 export function collectRevisions({ issue, pr = null, issueComments, prComments = [], roles }) {
@@ -45,12 +58,14 @@ export function collectRevisions({ issue, pr = null, issueComments, prComments =
   const changes = [];
   const candidates = pr === null ? [] : read(prComments, 'change');
   for (const { c, message } of candidates.sort((a, b) => a.c.id - b.c.id)) {
-    if (changes.length >= MAX_CHANGES || Number(message.meta.pr) !== pr) continue;
+    const source = changeSource(prComments, Number(message.meta['reply-to']));
+    const used = changes.filter((r) => r.source === source).length;
+    if (used >= limitOf(source) || Number(message.meta.pr) !== pr) continue;
     const rev = Number(message.meta.rev);
     const lastChange = Math.max(0, ...changes.map((r) => r.rev));
     const lastPlan = Math.max(0, ...plans.filter((r) => r.id < c.id).map((r) => r.rev));
     if (rev <= lastChange || rev < lastPlan) continue;
-    changes.push({ id: c.id, where: 'pr', type: 'change', rev, fields: message.fields });
+    changes.push({ id: c.id, where: 'pr', type: 'change', rev, fields: message.fields, source });
   }
   return [...plans, ...changes].sort((a, b) => a.rev - b.rev || a.id - b.id);
 }
@@ -59,7 +74,7 @@ export function collectRevisions({ issue, pr = null, issueComments, prComments =
  * PR 댓글 하나가 실행할 change인지 판단한다.
  * - none: change가 아니거나, 보낼 수 없는 계정이 보냈거나(공개 저장소라 무시한다), 이미 처리함
  * - invalid: 형식 오류, PR이나 이슈 번호가 다름, 근거 사용자 댓글이 없음, rev가 최신이 아님
- * - limit: 이 PR에서 change가 MAX_CHANGES회를 넘음
+ * - limit: 이 PR에서 같은 근거(리뷰 정리, 사용자 수정 요청)의 change가 횟수를 넘음
  * - run: 실행한다
  * @param {object} input
  * @param {{id: number, login: string, body: string}} input.comment 판단할 댓글
@@ -74,6 +89,8 @@ export function classifyChange({ comment, comments, issueComments, roles, issue,
   const none = { kind: 'none', errors: [] };
   const senders = [...roles.codex, ...roles.maintainer];
   if (!senders.includes(comment.login)) return none;
+  // Codex에게 보내는 요청(리뷰 정리, 사용자 수정 요청)은 change 틀을 코드 블록에 담고 있을 뿐 change가 아니다.
+  if (/^\s*@codex\b/.test(comment.body)) return none;
 
   const { message, errors } = validateMessage(comment, roles);
   if (!message) {
@@ -129,11 +146,15 @@ export function classifyChange({ comment, comments, issueComments, roles, issue,
   }
   if (problems.length) return { kind: 'invalid', errors: problems };
 
-  const used = prior.filter((r) => r.type === 'change' && r.where === 'pr').length;
-  if (used >= MAX_CHANGES) {
+  const source = changeSource(comments, replyTo);
+  const used = prior.filter((r) => r.type === 'change' && r.source === source).length;
+  if (used >= limitOf(source)) {
+    const what = source === 'review' ? '리뷰 정리' : '사용자 수정 요청';
     return {
       kind: 'limit',
-      errors: [`이 PR에서 change를 이미 ${used}회 실행했습니다 (최대 ${MAX_CHANGES}회).`],
+      errors: [
+        `이 PR에서 ${what}로 change를 이미 ${used}회 실행했습니다 (최대 ${limitOf(source)}회).`,
+      ],
       changeId: comment.id,
       rev,
       replyTo,
@@ -153,7 +174,15 @@ export function decideChange({ labels, open, sameRepo, reply }) {
   if (reply.kind === 'none') return none('not a change to run');
   const aiPr = ['ai:in-progress', 'ai:ready', 'ai:needs-human'].some((l) => labels.includes(l));
   if (!open || !sameRepo || !aiPr) return none('not an AI PR');
-  if (reply.kind === 'invalid') return { ...none('invalid change'), action: 'reject' };
+  // 형식이 틀린 change를 기다리면 흐름이 멈춰 있으므로 사용자에게 넘긴다.
+  if (reply.kind === 'invalid') {
+    return {
+      action: 'reject',
+      reason: 'invalid change',
+      addLabels: labels.includes('ai:needs-human') ? [] : ['ai:needs-human'],
+      removeLabels: labels.includes('ai:ready') ? ['ai:ready'] : [],
+    };
+  }
   if (reply.kind === 'limit') {
     return {
       action: 'halt',

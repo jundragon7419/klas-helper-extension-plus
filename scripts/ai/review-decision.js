@@ -2,6 +2,13 @@
 // GitHub API 호출은 워크플로가 하고, 이 파일은 모은 자료로 판단만 한다. tests/review-decision.test.ts가 검사한다.
 
 import { parseMessage } from './ai-msg.js';
+import {
+  decideTriage,
+  inlineFinding,
+  MAX_TRIAGES,
+  parseTriage,
+  taskFindings,
+} from './codex-requests.js';
 
 export const MAX_ROUNDS = 3;
 
@@ -153,16 +160,13 @@ export function summarizeChecks(runs) {
 }
 
 /**
- * @param {object} input
- * @param {string[]} input.labels PR 라벨
- * @param {boolean} input.open PR이 열려 있는지
- * @param {boolean} input.sameRepo head 브랜치가 같은 저장소인지
- * @param {string} input.head PR head SHA
- * @param {{login: string, body: string}[]} input.comments PR 댓글
- * @param {{id: number, login: string, commitId: string, inlineCount: number}[]} input.reviews PR 리뷰
- * @param {{status: string, conclusion: string | null}[]} input.checkRuns head의 check 결과
- * @param {string} input.codexBot Codex 봇 로그인
- * @param {string} input.handlerBot 처리 표시를 남기는 봇 로그인
+ * AI review loop가 PR에서 다음에 할 일을 정한다(docs/AI-COLLABORATION.md "흐름"의 4).
+ * - CI 실패: Claude가 바로 고친다(ci-<head>). 고친 뒤에도 두 번 연속 실패하면 멈춘다
+ * - 현재 커밋 리뷰에 지적이 있음: Codex에게 리뷰 정리를 요청한다(triage). Codex의 change가 Claude를 부른다
+ *   이미 요청한 커밋이면 기다리고, 앞 회차에서 넘긴 지적이 다시 나오거나 정리 횟수를 넘으면 멈춘다
+ * - Codex가 리뷰 대신 코드를 고침: 멈춘다
+ * - 지적 없음, CI 성공: ai:ready
+ * @param {ReviewInput} input
  */
 export function decideReview(input) {
   const { labels, head, codexBot, handlerBot } = input;
@@ -172,11 +176,20 @@ export function decideReview(input) {
   if (!input.open || !active || labels.includes('ai:needs-human') || !input.sameRepo) {
     return none('not an active AI PR');
   }
+  const back = labels.includes('ai:ready');
+  const halt = (reason, message, extra = {}) => ({
+    action: 'halt',
+    reason,
+    message,
+    ...extra,
+    addLabels: ['ai:needs-human', ...(back ? ['ai:in-progress'] : [])],
+    removeLabels: back ? ['ai:ready'] : [],
+  });
 
-  const handled = (id) =>
-    input.comments.some(
-      (c) => c.login === handlerBot && c.body.includes(`<!-- ai-handled:${id} -->`),
-    );
+  const handledIds = input.comments
+    .filter((c) => c.login === handlerBot)
+    .flatMap((c) => [...c.body.matchAll(/<!-- ai-handled:([^ ]+) -->/g)].map((m) => m[1]));
+  const handled = (id) => handledIds.includes(id);
 
   const results = codexResults({
     head,
@@ -186,71 +199,100 @@ export function decideReview(input) {
   });
   // Codex가 리뷰 대신 코드를 고쳤으면 고칠 문제를 찾았다는 뜻이다. 자동으로 판단하지 않고 사용자에게 넘긴다.
   if (results.unresolvedChange) {
-    const back = labels.includes('ai:ready');
-    return {
-      action: 'halt',
-      reason: `codex code-change task ${results.unresolvedChange.id ?? ''}`.trim(),
+    return halt(`codex code-change task ${results.unresolvedChange.id ?? ''}`.trim(), null, {
       notice: results.unresolvedChange.id ?? null,
-      addLabels: ['ai:needs-human', ...(back ? ['ai:in-progress'] : [])],
+    });
+  }
+
+  const ci = summarizeChecks(input.checkRuns);
+  if (ci === 'failure' && !handled(`ci-${head}`)) {
+    // 바로 앞 두 처리가 모두 CI 수정이었다면 고친 뒤에도 두 번 연속 실패한 것이다.
+    if (handledIds.length >= 2 && handledIds.slice(-2).every((id) => id.startsWith('ci-'))) {
+      return halt(
+        `CI failed again on ${head.slice(0, 7)}`,
+        `CI가 Claude 수정 뒤에도 두 번 연속 실패했습니다(현재 커밋 ${head.slice(0, 7)}).`,
+      );
+    }
+    return {
+      action: 'fix',
+      reason: `CI failed on ${head.slice(0, 7)}; task=ci-${head}`,
+      task: `ci-${head}`,
+      addLabels: back ? ['ai:in-progress'] : [],
       removeLabels: back ? ['ai:ready'] : [],
     };
   }
 
-  // 지적은 현재 head에 대한 Codex 리뷰의 줄 단위 댓글로 판단한다. 리뷰 본문은 언어와 문구가 바뀔 수 있어 보지 않는다.
-  // 작업 결과 댓글로 온 리뷰는 `[P0]`~`[P3]` 표시를 지적으로 본다.
-  const reviewFinding =
-    input.reviews
-      .filter((r) => r.login === codexBot && r.commitId === head && r.inlineCount > 0)
-      .at(-1) ?? null;
-  const taskFinding = results.reviewTasks.filter((c) => c.task.findings > 0).at(-1) ?? null;
-  const finding = reviewFinding
-    ? { id: `review-${reviewFinding.id}`, reason: `codex review ${reviewFinding.id}` }
-    : taskFinding
-      ? { id: `task-${taskFinding.id}`, reason: `codex task review ${taskFinding.id}` }
-      : null;
-
+  // 현재 커밋의 Codex 지적: 줄 단위 지적과 작업 결과 리뷰의 [P0]~[P3].
+  // 이전 커밋에서 Resolve되지 않은 P0/P1은 머지 게이트가 막는다(#139). 여기서 다시 넘기면 고친 뒤에도 반복으로 멈춘다.
+  let findings = [
+    ...(input.inlineComments ?? [])
+      .filter((c) => c.login === codexBot && c.originalCommitId === head)
+      .map(inlineFinding)
+      .filter((f) => f !== null),
+    ...results.reviewTasks.flatMap((c) => taskFindings({ body: c.body, url: c.url ?? null })),
+  ];
   let state = null;
   for (const c of input.comments) {
     if (c.login !== codexBot) continue;
     state = parseCodexState(c.body) ?? state;
   }
-  const passedByState =
-    state?.commit_sha === head &&
-    state?.status === 'completed' &&
-    state?.has_any_findings === false;
-  const passedByTask = results.reviewTasks.some((c) => c.task.findings === 0);
-  const passed = (passedByState || passedByTask) && !finding;
-  const ci = summarizeChecks(input.checkRuns);
+  const stateHead = state?.commit_sha === head && state?.status === 'completed' ? state : null;
 
-  let task = null;
-  if (finding && !handled(finding.id)) {
-    task = finding;
-  } else if (ci === 'failure' && !handled(`ci-${head}`)) {
-    task = { id: `ci-${head}`, reason: `CI failed on ${head.slice(0, 7)}` };
+  const triages = input.comments
+    .filter((c) => c.login === input.maintainer)
+    .map((c) => ({ id: c.id, ...parseTriage(c.body) }))
+    .filter((x) => x.head !== undefined);
+  // 이 커밋의 정리 요청에 Codex가 change로 답했고 Claude가 처리했는데 커밋이 그대로면,
+  // 바꿀 항목 없이 P2, P3을 넘기기로 한 것이다. P0/P1이 남았으면 멈추고, 아니면 남은 지적은 받아들인 것으로 본다.
+  const settled = triages
+    .filter((tr) => tr.head === head)
+    .some((tr) =>
+      input.comments.some((c) => {
+        if (c.login !== codexBot) return false;
+        const meta = parseMessage(c.body)?.meta;
+        return (
+          meta?.type === 'change' && Number(meta['reply-to']) === tr.id && handled(`change-${c.id}`)
+        );
+      }),
+    );
+  if (settled && findings.length > 0) {
+    const blocking = findings.filter((f) => f.level <= 1);
+    if (blocking.length > 0) {
+      return halt(
+        'blocking findings left',
+        `리뷰 정리 뒤에도 커밋이 바뀌지 않았고 P0/P1 지적이 남았습니다: ${blocking.map((f) => f.title).join(', ')}`,
+      );
+    }
+    findings = [];
   }
 
-  if (task) {
-    const back = labels.includes('ai:ready');
-    const round = labels.filter((l) => /^ai:round-\d+$/.test(l)).length + 1;
-    if (round > MAX_ROUNDS) {
-      // ai:ready에서 멈출 때도 ai:in-progress로 되돌린다. 사용자가 ai:needs-human을 지우면 이 라벨로 다시 판단한다.
-      return {
-        action: 'stop',
-        reason: `round limit (${task.reason})`,
-        addLabels: ['ai:needs-human', ...(back ? ['ai:in-progress'] : [])],
-        removeLabels: back ? ['ai:ready'] : [],
-      };
+  if (results.reviewed && findings.length > 0) {
+    const next = decideTriage({ head, findings, triages });
+    if (next.kind === 'wait') return none(`triage requested for ${head.slice(0, 7)}`);
+    if (next.kind === 'repeat') {
+      const list = next.repeated.map((f) => `[P${f.level}] ${f.title}`).join(', ');
+      return halt(
+        'finding repeated',
+        `앞 회차에서 고치기로 넘긴 Codex 지적이 다시 나왔습니다: ${list}`,
+      );
+    }
+    if (next.kind === 'limit') {
+      return halt(
+        'triage limit',
+        `리뷰 정리를 ${MAX_TRIAGES}회 했지만 Codex 지적이 남았습니다(현재 커밋 ${head.slice(0, 7)}).`,
+      );
     }
     return {
-      action: 'fix',
-      reason: `${task.reason}; task=${task.id}; round=${round}`,
-      task: task.id,
-      round,
-      addLabels: [...(back ? ['ai:in-progress'] : []), `ai:round-${round}`],
+      action: 'triage',
+      reason: `${findings.length} findings on ${head.slice(0, 7)}`,
+      findings,
+      addLabels: back ? ['ai:in-progress'] : [],
       removeLabels: back ? ['ai:ready'] : [],
     };
   }
 
+  const passed =
+    results.reviewed && findings.length === 0 && (settled || stateHead?.has_any_findings !== true);
   if (passed && ci === 'success' && !labels.includes('ai:ready')) {
     return {
       action: 'ready',
@@ -261,7 +303,7 @@ export function decideReview(input) {
   }
 
   const codex = state ? `${String(state.commit_sha).slice(0, 7)}/${state.status}` : 'none';
-  return none(`waiting (codex=${codex}, finding=${Boolean(finding)}, ci=${ci})`);
+  return none(`waiting (codex=${codex}, findings=${findings.length}, ci=${ci})`);
 }
 
 /**

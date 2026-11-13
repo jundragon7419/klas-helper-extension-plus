@@ -8,7 +8,14 @@ export interface Revision {
   type: 'plan-rev' | 'change';
   rev: number;
   fields: Record<string, string>;
+  /** change의 근거. review는 리뷰 정리 요청, user는 사용자 수정 요청 */
+  source?: 'review' | 'user';
 }
+
+export function changeSource(
+  comments: { id: number; body: string }[],
+  replyTo: number,
+): 'review' | 'user';
 
 export function collectRevisions(input: {
   issue: number;
