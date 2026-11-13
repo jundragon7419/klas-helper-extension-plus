@@ -22,6 +22,7 @@
     "test:e2e": "playwright test",
     "fixtures:snippet": "node scripts/fixtures/build-snippet.ts api",
     "fixtures:dom-snippet": "node scripts/fixtures/build-snippet.ts dom",
+    "ai:metrics": "node scripts/ai/metrics.js",
     "tokens:preview": "vite --config scripts/tokens-preview/vite.config.ts",
     "postinstall": "wxt prepare"
   },

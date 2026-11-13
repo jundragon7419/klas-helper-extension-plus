@@ -2,7 +2,7 @@
 # - Codex가 answer(재시작: 예)로 답하면 Claude를 다시 부른다(이슈는 AI implement, PR은 AI review loop).
 # - Codex가 need-user, 재시작하지 않는 answer, 형식이 틀린 답을 남기면 메인테이너에게 알린다.
 # - 30분 안에 Codex 답이 없으면 그대로 알린다.
-# 흐름 전체는 docs/AI-COLLABORATION.md "멈췄을 때"를 따른다.
+# 흐름 전체는 docs/AI-COLLABORATION.md "흐름"의 3. 질문을 따른다.
 name: AI relay
 
 on:
