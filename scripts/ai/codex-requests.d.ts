@@ -50,3 +50,10 @@ export function decideTriage(input: { head: string; findings: Finding[]; triages
   repeated: Finding[];
 };
 export function parseUserChange(body: string | null | undefined): string | null;
+export const REQUEST_TIMEOUT_MS: number;
+export function overdueRequest(input: {
+  comments: { id: number; login: string; body: string; at: string }[];
+  maintainer: string;
+  codexBot: string;
+  now: number;
+}): { id: number; login: string; body: string; at: string } | null;

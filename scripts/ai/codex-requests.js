@@ -205,6 +205,27 @@ export function decideTriage({ head, findings, triages }) {
   return { kind: 'triage', repeated: [] };
 }
 
+/** 자동 요청이 이 시간 넘게 답을 받지 못하면 멈춘다. */
+export const REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
+
+/**
+ * 메인테이너 계정으로 단 마지막 자동 요청(리뷰 정리, /change 전달)이 답 없이 시간을 넘겼으면 그 요청을, 아니면 null.
+ * 답은 Codex가 단 ai-msg 중 reply-to가 그 요청 ID인 것만 센다. 리뷰 결과나 상태 댓글은 답이 아니다.
+ * @param {{comments: {id: number, login: string, body: string, at: string}[], maintainer: string, codexBot: string, now: number}} input
+ */
+export function overdueRequest({ comments, maintainer, codexBot, now }) {
+  const request = comments
+    .filter((c) => c.login === maintainer && /^@codex \(자동 요청\)/.test(c.body ?? ''))
+    .at(-1);
+  if (!request || now - Date.parse(request.at) <= REQUEST_TIMEOUT_MS) return null;
+  const answered = comments.some((c) => {
+    if (c.login !== codexBot) return false;
+    const replyTo = /<!--\s*ai-msg:\S*\s[^>]*\breply-to=(\d+)/.exec(c.body ?? '')?.[1];
+    return Number(replyTo) === request.id;
+  });
+  return answered ? null : request;
+}
+
 /** 사용자 수정 요청 댓글이면 요청 내용을, 아니면 null. 첫 줄이 `/change`로 시작해야 한다. */
 export function parseUserChange(body) {
   const m = /^\s*\/change(?:[ \t]+(.*))?(?:\r?\n([\s\S]*))?$/.exec(body ?? '');

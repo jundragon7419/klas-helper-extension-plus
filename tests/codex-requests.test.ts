@@ -5,6 +5,7 @@ import {
   findingKey,
   inlineFinding,
   MAX_TRIAGES,
+  overdueRequest,
   parseTriage,
   parseUserChange,
   taskFindings,
@@ -159,5 +160,40 @@ describe('parseUserChange', () => {
     expect(parseUserChange('좋아요 /change')).toBeNull();
     expect(parseUserChange('/change')).toBeNull();
     expect(parseUserChange('/changes 이것')).toBeNull();
+  });
+});
+
+describe('overdueRequest', () => {
+  const T0 = Date.parse('2026-11-13T09:00:00Z');
+  const at = (min: number) => new Date(T0 + min * 60_000).toISOString();
+  const req = { id: 100, login: ME, body: '@codex (자동 요청) 리뷰 정리', at: at(0) };
+  const now = T0 + 31 * 60_000;
+  const run = (comments: { id: number; login: string; body: string; at: string }[], time = now) =>
+    overdueRequest({ comments, maintainer: ME, codexBot: CODEX, now: time });
+
+  it('30분 넘게 답이 없으면 그 요청을 돌려준다', () => {
+    expect(run([req])?.id).toBe(100);
+    expect(run([req], T0 + 29 * 60_000)).toBeNull();
+  });
+
+  it('리뷰 결과나 상태 댓글은 답으로 세지 않는다', () => {
+    const review = { id: 101, login: CODEX, body: '## 검토 결과\n\n### [P1] x', at: at(5) };
+    expect(run([req, review])?.id).toBe(100);
+  });
+
+  it('reply-to가 그 요청인 Codex 메시지만 답으로 센다', () => {
+    const answer = (replyTo: number, login = CODEX) => ({
+      id: 102,
+      login,
+      body: `@claude\n<!-- ai-msg:v1 type=change issue=148 pr=150 head=- rev=1 reply-to=${replyTo} -->`,
+      at: at(5),
+    });
+    expect(run([req, answer(100)])).toBeNull();
+    expect(run([req, answer(99)])?.id).toBe(100);
+    expect(run([req, answer(100, 'someone')])?.id).toBe(100);
+  });
+
+  it('자동 요청이 아닌 메인테이너 댓글은 보지 않는다', () => {
+    expect(run([{ ...req, body: '@codex review' }])).toBeNull();
   });
 });
