@@ -312,6 +312,15 @@ describe.skipIf(!hasBash)('request-codex.sh', () => {
 
 // request-review.sh: 검토 반영이 push됐고 Codex 자동 검토가 시작되지 않았을 때만 메인테이너 계정으로 "@codex review"를 단다.
 const hasJq = spawnSync('jq', ['--version']).status === 0;
+const stateComments = (sha: string) =>
+  JSON.stringify([
+    {
+      id: 1,
+      user: { login: CODEX },
+      created_at: '2026-11-12T00:00:00Z',
+      body: `<!-- codex-review-state:v1 {"code_review":{"commit_sha":"${sha}","status":"in_progress"}} -->`,
+    },
+  ]);
 const reactions = (createdAt: string) =>
   JSON.stringify([{ id: 123, user: { login: CODEX }, content: 'eyes', created_at: createdAt }]);
 
@@ -334,7 +343,7 @@ describe.skipIf(!hasBash || !hasJq)('request-review.sh', () => {
         GH_TOKEN: 'maintainer-token',
         ACTIONS_TOKEN: 'actions-token',
         CODEX_AUTO_REVIEW_WAIT: '0',
-        CODEX_COMMENTS: '',
+        PR_COMMENTS: '[]',
         CODEX_REACTIONS: '[]',
         REVIEW_SINCE: '2026-11-13T00:05:00Z',
         ...env,
@@ -359,11 +368,10 @@ describe.skipIf(!hasBash || !hasJq)('request-review.sh', () => {
         '#!/usr/bin/env bash',
         'echo "[$GH_TOKEN] $*" >> "$GH_CALLS"',
         '[[ "$*" == *".head.sha"* ]] && echo "$NOW_SHA"',
-        // --jq 대신 미리 거른 결과를 돌려준다.
-        '[[ "$*" == *"/comments --paginate"* ]] && [ -n "$CODEX_COMMENTS" ] && echo "$CODEX_COMMENTS"',
-        // 반응 목록은 jq로 실제 --jq 식을 적용해 거른다.
+        // 댓글과 반응 목록은 jq로 실제 --jq 식을 적용해 거른다.
         'args=("$@"); jqf=""',
         'for ((i = 0; i < ${#args[@]}; i++)); do [ "${args[$i]}" = "--jq" ] && jqf="${args[$((i + 1))]}"; done',
+        '[[ "$*" == *"/comments --paginate"* ]] && echo "$PR_COMMENTS" | jq -r "$jqf"',
         '[[ "$*" == *"/reactions"* ]] && echo "$CODEX_REACTIONS" | jq -r "$jqf"',
         'exit 0',
         '',
@@ -386,16 +394,14 @@ describe.skipIf(!hasBash || !hasJq)('request-review.sh', () => {
     );
   });
 
-  it('Codex가 새 head를 스스로 검토하기 시작했으면 요청하지 않는다', () => {
-    const state = (sha: string) =>
-      `<!-- codex-review-state:v1 {"code_review":{"commit_sha":"${sha}","status":"in_progress"}} -->`;
-    const started = run({ CODEX_COMMENTS: state('b'.repeat(40)) });
+  it('Codex가 새 head를 스스로 리뷰하기 시작했으면 요청하지 않는다', () => {
+    const started = run({ PR_COMMENTS: stateComments('b'.repeat(40)) });
     expect(started.status).toBe(0);
-    expect(started.stdout).toContain('스스로 검토');
+    expect(started.stdout).toContain('이미 리뷰');
     expect(readCalls()).not.toContain('-X POST');
 
     const eyes = run({ CODEX_REACTIONS: reactions('2026-11-13T00:06:00Z') });
-    expect(eyes.stdout).toContain('스스로 검토');
+    expect(eyes.stdout).toContain('이미 리뷰');
     expect(readCalls()).not.toContain('-X POST');
   });
 
@@ -415,10 +421,24 @@ describe.skipIf(!hasBash || !hasJq)('request-review.sh', () => {
     expect(run({ CODEX_REACTIONS: others }).stdout).toContain('재검토를 요청했습니다');
   });
 
+  it('push 뒤에 메인테이너가 이미 @codex review를 달았으면 다시 달지 않는다', () => {
+    const asked = (at: string, login = 'jundragon7419', body = '@codex review') =>
+      JSON.stringify([{ id: 7, user: { login }, created_at: at, body }]);
+    expect(run({ PR_COMMENTS: asked('2026-11-13T00:06:00Z') }).stdout).toContain('이미 리뷰');
+    expect(readCalls()).not.toContain('-X POST');
+
+    // push 전의 요청, 다른 계정의 요청, 다른 내용의 댓글은 세지 않는다.
+    for (const comments of [
+      asked('2026-11-13T00:01:00Z'),
+      asked('2026-11-13T00:06:00Z', 'someone'),
+      asked('2026-11-13T00:06:00Z', 'jundragon7419', '@codex review 하고 고쳐 줘'),
+    ]) {
+      expect(run({ PR_COMMENTS: comments }).stdout).toContain('재검토를 요청했습니다');
+    }
+  });
+
   it('이전 커밋의 상태 표시만 있으면 요청한다', () => {
-    const result = run({
-      CODEX_COMMENTS: `<!-- codex-review-state:v1 {"code_review":{"commit_sha":"${'a'.repeat(40)}"}} -->`,
-    });
+    const result = run({ PR_COMMENTS: stateComments('a'.repeat(40)) });
     expect(result.stdout).toContain('재검토를 요청했습니다');
     expect(readCalls()).toContain(
       '-X POST repos/owner/repo/issues/111/comments -f body=@codex review',

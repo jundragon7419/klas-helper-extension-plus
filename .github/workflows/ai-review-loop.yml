@@ -1,6 +1,6 @@
 # Claude가 연 PR(라벨 ai:in-progress)에서 Codex 리뷰와 CI 결과를 보고 다음 단계를 정한다.
 # - 현재 head에 Codex 지적이 있거나 CI가 실패하면 Claude가 고친다 (최대 3회).
-#   Claude는 커밋만 하고, push-fix 작업이 검사한 뒤 메인테이너 토큰으로 push하고 Codex 재검토를 요청한다.
+#   Claude는 커밋만 하고, push-fix 작업이 검사한 뒤 메인테이너 토큰으로 push한다. Codex 재리뷰 요청은 Codex review request 워크플로가 한다.
 # - Codex 요약 댓글의 상태 표시가 현재 head 검토 완료를 가리키고, 지적이 없고, CI가 성공하면 ai:ready로 바꾼다.
 # - Codex 리뷰가 오래 오지 않거나 회차를 넘기면 ai:needs-human으로 멈춘다.
 # - Claude가 ask나 objection으로 멈춘 뒤 Codex가 answer(재시작: 예)로 답하면 ai-relay가 workflow_dispatch로 다시 부른다.
@@ -380,7 +380,7 @@ jobs:
           path: ${{ runner.temp }}/fix.bundle
           retention-days: 1
 
-  # 검토 반영을 검사하고 메인테이너 토큰으로 push한 뒤 Codex 재검토를 요청한다.
+  # 검토 반영을 검사하고 메인테이너 토큰으로 push한다. push가 Codex review request 워크플로를 불러 재리뷰가 돈다.
   # 메인테이너 토큰이 Claude가 건드린 파일에 닿지 않도록 기본 브랜치를 새로 체크아웃해 실행한다.
   push-fix:
     needs: [evaluate, fix]
@@ -406,15 +406,7 @@ jobs:
           BEFORE: ${{ needs.fix.outputs.before }}
           BUNDLE: ${{ runner.temp }}/ai-fix/fix.bundle
         run: bash scripts/ai/push-fix.sh
-
-      - name: Codex 재검토 요청
-        env:
-          GH_TOKEN: ${{ secrets.MAINTAINER_PR_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          ACTIONS_TOKEN: ${{ github.token }}
-          PR: ${{ needs.evaluate.outputs.pr }}
-          BEFORE: ${{ needs.fix.outputs.before }}
-        run: bash scripts/ai/request-review.sh
+      # Codex 재리뷰 요청은 이 push가 부르는 Codex review request 워크플로가 한다(모든 PR 공통).
 
   # 자동 흐름이 멈추면 Codex에게 정리를 맡긴다. 메인테이너 알림은 ai-relay 워크플로가 보낸다.
   # 메인테이너 토큰이 PR 브랜치 파일에 닿지 않도록 기본 브랜치를 새로 체크아웃해 실행한다.
