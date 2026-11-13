@@ -28,11 +28,11 @@ export function isAiMessage(body) {
 const COMMIT_SHA = /`[0-9a-f]{7,40}`/;
 const COMMIT_WORD =
   /커밋(했|하였|으로 (저장|남|만들)|을 (만들|생성|남겼))|\bcommitted\b|\bcommit(ted)? (the |my )?changes?\b/i;
+// PR은 "만들었다"는 완료 보고만 본다. "PR을 열지 못한 경우"처럼 리뷰가 PR 생성을 다루는 문장은 코드 수정이 아니다(#149).
 const CODE_CHANGE = [
   /\bmake_pr\b/,
-  /\b(follow-up )?pull request (metadata|title)/i,
-  /(후속 )?(PR|Pull Request|풀 리퀘스트)(을|를)? ?(생성|만들|열)/i,
-  /\b(created?|opened?|prepared?) (a |the )?(follow-up )?(PR|pull request)\b/i,
+  /(PR|Pull Request|풀 리퀘스트)(을|를)? ?(생성했|만들었|열었)/i,
+  /\b(created|opened|prepared) (a |the )?(follow-up )?(PR|pull request)\b/i,
 ];
 const isCodeChange = (body) =>
   (COMMIT_SHA.test(body) && COMMIT_WORD.test(body)) || CODE_CHANGE.some((re) => re.test(body));

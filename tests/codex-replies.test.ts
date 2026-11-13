@@ -64,3 +64,43 @@ describe('끝의 Codex 작업 링크 줄', () => {
     expect(parseMessage(middle)?.fields['답']).toContain('View task');
   });
 });
+
+describe('PR 생성을 다루는 리뷰', () => {
+  const head = 'c'.repeat(40);
+  const review = (line: string) =>
+    [
+      '## 검토 결과',
+      '',
+      `- **[P1] ${line}**  `,
+      `  설명 [scripts/ai/open-ai-pr.shL1](https://github.com/o/r/blob/${head}/scripts/ai/open-ai-pr.sh#L1)`,
+      '',
+      ' [View task →](https://chatgpt.com/s/cd_1)',
+    ].join('\n');
+
+  it('PR 생성 실패나 권고를 다루는 지적은 리뷰로 둔다', () => {
+    for (const line of [
+      'PR을 열지 못한 경우 실패를 전파하세요',
+      'PR 생성 실패를 알리세요',
+      'Pull Request를 만들기 전에 브랜치를 확인하세요',
+      'The workflow should open a pull request only after the checks pass',
+      'Do not create the follow-up pull request metadata twice',
+    ]) {
+      expect(classifyCodexTask(review(line), head)).toEqual({
+        kind: 'review',
+        findings: 1,
+        blocking: 1,
+      });
+    }
+  });
+
+  it('PR을 만들었다는 완료 보고는 코드 수정으로 본다', () => {
+    for (const line of [
+      '후속 Pull Request를 생성했습니다',
+      '후속 PR을 만들었습니다',
+      'Created the follow-up pull request metadata',
+      'Prepared the follow-up pull request metadata',
+    ]) {
+      expect(classifyCodexTask(review(line), head)?.kind).toBe('code-change');
+    }
+  });
+});
