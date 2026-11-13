@@ -65,19 +65,37 @@ jobs:
       - name: Firefox 확장 검사
         run: npm run lint:firefox
 
+  # 빌드한 확장을 Chromium에 올리고, 가짜 KLAS 화면(DOM fixture와 API fixture)에서 content script를 확인한다.
+  # Chromium이 Chrome과 Edge를 대표한다. 머지 게이트(ai-gate)가 check와 함께 이 작업의 성공을 요구한다.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 빌드 (Chrome)
+        run: npm run build
+
       - name: Playwright Chromium 설치
         run: npx playwright install --with-deps chromium
 
-      # 빌드한 확장을 Chromium에 올려 background가 실행되는지 확인한다. Chrome과 Edge를 대표한다.
       - name: E2E (Chromium)
         run: npm run test:e2e
 
-      - name: E2E 기록 올리기
-        if: failure()
+      # 테스트마다 남긴 화면 스크린샷과 실패 기록. PR의 Checks 화면에서 내려받는다.
+      - name: E2E 스크린샷과 기록 올리기
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: e2e-screenshots
           path: |
             playwright-report/
             test-results/
-          retention-days: 7
+          retention-days: 14

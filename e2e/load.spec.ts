@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { expect, extensionPath, test } from './fixtures';
 
 // 확장이 Chromium에 올라가고 background service worker가 실행되는지 확인한다.
-// KLAS 화면 테스트는 하지 않는다(가짜 KLAS 화면 E2E는 별도 이슈).
+// KLAS 화면 테스트는 klas-screens.spec.ts에 있다.
 const built = JSON.parse(readFileSync(resolve(extensionPath, 'manifest.json'), 'utf8')) as {
   name: string;
   version: string;

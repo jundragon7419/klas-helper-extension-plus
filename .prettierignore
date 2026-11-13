@@ -9,3 +9,6 @@ package-lock.json
 
 # 마크다운 문서는 Prettier를 적용하지 않는다
 *.md
+
+# 화면 DOM 발췌는 모은 그대로 둔다. 줄바꿈과 공백도 화면 구조의 일부다.
+tests/fixtures/klas/dom/

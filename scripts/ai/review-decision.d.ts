@@ -9,8 +9,12 @@ export interface CodexReviewState {
 
 export function parseCodexState(body: string | null | undefined): CodexReviewState | null;
 
+export const CI_CHECKS: string[];
+
 export interface CheckRun {
   id?: number;
+  /** check run 이름. 있으면 CI_CHECKS의 이름마다 따로 본다. */
+  name?: string;
   status: string;
   conclusion: string | null;
 }

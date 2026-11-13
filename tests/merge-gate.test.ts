@@ -185,8 +185,11 @@ describe('updateGate', () => {
         { user: { login: CODEX }, original_commit_id: OLD, body: finding('P1').body },
       ],
       listForRef: [
-        { id: 1, status: 'completed', conclusion: 'cancelled' },
-        { id: 2, status: 'completed', conclusion: 'success' },
+        { id: 1, name: 'check', status: 'completed', conclusion: 'cancelled' },
+        { id: 2, name: 'check', status: 'completed', conclusion: 'success' },
+        { id: 3, name: 'e2e', status: 'completed', conclusion: 'success' },
+        // CI가 아닌 다른 워크플로의 작업은 보지 않는다.
+        { id: 4, name: 'gate', status: 'completed', conclusion: 'failure' },
       ],
     };
     const named = (name: string) => Object.assign(() => undefined, { methodName: name });

@@ -55,6 +55,18 @@
 - 첫 줄은 정보 줄 `<!-- klas-dom:v1 {...} -->`입니다. 페이지 이름, 화면 경로(쿼리 제외), 선택자, 수집한 날, 남긴 낱말이 들어 있습니다. 정보 줄도 본문과 같이 검사합니다.
 - `tests/klas-dom-fixture.test.ts`가 파일 이름, 정보 줄, 남은 학번, 한글(남긴 낱말 제외), 전화번호, 이메일 형식을 검사합니다.
 
+### 지금 있는 파일
+
+E2E(`e2e/klas.ts`)가 같은 경로의 화면 요청에 이 파일로 답합니다. 셋 모두 실제 화면에서 모으지 않고 단위 테스트와 #104에 적힌 구조로 직접 쓴 파일이라 정보 줄에 `"handwritten":true`가 있습니다. 실제 화면 발췌를 모으면 같은 이름으로 바꾸고, E2E가 그대로 통과하는지 확인합니다.
+
+| 파일 | 화면 | E2E에서 확인하는 기능 |
+|---|---|---|
+| `home.html` | `/std/cmn/frame/Frame.do` (홈) | KLAS Helper+ 탭과 마감 목록, 수업 시각. 마감 목록의 계정 확인도 이 화면을 읽는다 |
+| `online-lectures.html` | `/std/lis/evltn/OnlineCntntsStdPage.do` | 시청 완료 강의 숨기기, 강의계획서 바로가기 |
+| `syllabus-search.html` | `/std/cps/atnlc/LectrePlanStdPage.do` | 강의계획서 검색 Enter |
+
+E2E는 API fixture의 날짜를 모은 날(`collectedOn`)이 오늘이 되도록 모두 같은 날 수만큼 옮겨서 답합니다. 시간이 지나도 남은 마감이 있습니다.
+
 ### 지운 것과 남긴 것
 
 `scripts/fixtures/anonymize-dom.ts`가 처리합니다. 원본 화면은 바꾸지 않고 복사본을 고칩니다.

@@ -158,8 +158,11 @@ jobs:
               const inline = await github.paginate(github.rest.pulls.listCommentsForReview, { ...repo, pull_number: number, review_id: r.id });
               reviews.push({ id: r.id, login: r.user.login, commitId: r.commit_id, inlineCount: inline.length });
             }
-            const checkRuns = (await github.rest.checks.listForRef({ ...repo, ref: head, check_name: 'check' })).data.check_runs
-              .map((r) => ({ id: r.id, status: r.status, conclusion: r.conclusion }));
+            // CI의 check와 e2e 작업을 함께 본다(CI_CHECKS).
+            const { CI_CHECKS } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/review-decision.js`);
+            const checkRuns = (await github.paginate(github.rest.checks.listForRef, { ...repo, ref: head, filter: 'all' }))
+              .filter((r) => CI_CHECKS.includes(r.name))
+              .map((r) => ({ id: r.id, name: r.name, status: r.status, conclusion: r.conclusion }));
 
             const labels = pr.labels.map((l) => l.name);
             const sameRepo = pr.head.repo?.full_name === `${repo.owner}/${repo.repo}`;
