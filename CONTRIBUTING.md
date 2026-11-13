@@ -22,6 +22,8 @@ E2E 테스트(`npm run test:e2e`)를 돌리려면 Playwright용 Chromium을 한 
 npx playwright install chromium
 ```
 
+E2E는 로그인 없이 가짜 KLAS 화면에서 content script를 확인합니다. `klas.kw.ac.kr` 요청을 가로채 화면은 `tests/fixtures/klas/dom/`, API는 `tests/fixtures/klas/2026-2.json`으로 답합니다(`e2e/klas.ts`). 테스트마다 화면 스크린샷을 남기고, CI는 PR마다 `e2e-screenshots` artifact로 올립니다(PR의 Checks 탭 → CI 실행 → Artifacts).
+
 E2E는 Chromium 기반 브라우저(Chrome, Edge)만 대상으로 합니다. Chrome과 Edge는 확장을 명령줄로 올리는 옵션을 막아 두어서, Playwright가 내려받는 Chromium이 둘을 대표합니다. Firefox는 빌드 산출물 검사와 `npm run lint:firefox`만 자동으로 하고, 동작은 배포 전에 직접 확인합니다.
 
 ### 개발 서버
@@ -107,7 +109,7 @@ VS Code를 쓰면 저장소를 열 때 ESLint와 Prettier 확장 설치를 권�
 3. PR은 `develop`으로 보냅니다. PR 하나에는 기능 하나 또는 수정 하나만 담습니다.
 4. PR을 열기 전에 [PR을 열기 전에](#pr을-열기-전에)의 명령을 모두 통과시킵니다.
 5. Chrome 계열 브라우저(Chrome, Edge)에서 확장을 직접 로드해서 동작을 확인하고, 화면이 바뀌었다면 스크린샷을 PR에 붙입니다.
-6. CI `check`와 머지 게이트 `ai-gate`가 모두 통과해야 머지됩니다. `ai-gate`는 현재 커밋을 Codex가 검토했고 P0/P1 지적이 없을 때 통과합니다. PR을 연 뒤 커밋을 더 올렸다면 PR에 `@codex review`를 달아 다시 검토를 받습니다. 자세한 기준은 [Claude와 Codex 협업 규칙의 머지 게이트](docs/AI-COLLABORATION.md#머지-게이트)에 있습니다.
+6. CI `check`와 머지 게이트 `ai-gate`가 모두 통과해야 머지됩니다. `ai-gate`는 CI `e2e`의 성공도 확인합니다. `ai-gate`는 현재 커밋을 Codex가 검토했고 P0/P1 지적이 없을 때 통과합니다. PR을 연 뒤 커밋을 더 올렸다면 PR에 `@codex review`를 달아 다시 검토를 받습니다. 자세한 기준은 [Claude와 Codex 협업 규칙의 머지 게이트](docs/AI-COLLABORATION.md#머지-게이트)에 있습니다.
 
 `main`과 `develop`에 직접 push하지 않습니다.
 

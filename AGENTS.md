@@ -20,7 +20,7 @@ npm run lint:firefox
 npm run test:e2e
 ```
 
-`npm run test:e2e`는 Playwright Chromium이 필요하다(`npx playwright install chromium`). `npm run check:build`가 권한 스냅샷 차이로 실패하면, 의도한 권한 변경일 때만 `scripts/ci/manifest-access.json`을 고치고 PR에 이유를 적는다.
+`npm run test:e2e`는 Playwright Chromium이 필요하다(`npx playwright install chromium`). KLAS 화면을 바꾸는 content script 기능에는 `e2e/klas-screens.spec.ts`에 가짜 KLAS 화면 테스트를 더한다. 화면은 `tests/fixtures/klas/dom/`의 DOM 발췌, API 응답은 `tests/fixtures/klas/2026-2.json`으로 답한다(`e2e/klas.ts`). `npm run check:build`가 권한 스냅샷 차이로 실패하면, 의도한 권한 변경일 때만 `scripts/ci/manifest-access.json`을 고치고 PR에 이유를 적는다.
 
 ## 커밋과 PR
 
@@ -148,7 +148,7 @@ Codex가 PR을 검토할 때 적용한다 (Code Review Rules).
 
 - 리뷰 본문, 줄 단위 지적, 요약을 모두 한국어로 쓴다. 코드, 식별자, 파일 경로, 에러 메시지, 원어로 통용되는 기술 용어(race condition, focus trap 등)는 번역하지 않는다. 지적 제목도 한국어로 쓴다.
 - 검토는 현재 PR head 커밋 기준으로 한다. 이슈의 완료 조건을 만족하는지, 기존 기능을 깨뜨리지 않는지부터 본다.
-- 다음은 P1 이상으로 지적한다: 실제 학생 정보가 커밋에 들어감, manifest 권한 추가에 이유가 없음, KLAS 정보를 외부로 보냄, "하지 않는 것"의 기능, 테스트 없이 바뀐 동작, KLAS 응답이 비었거나 형식이 다를 때 잘못된 화면을 보여 줌.
+- 다음은 P1 이상으로 지적한다: 실제 학생 정보가 커밋에 들어감, manifest 권한 추가에 이유가 없음, KLAS 정보를 외부로 보냄, "하지 않는 것"의 기능, 테스트 없이 바뀐 동작, KLAS 응답이 비었거나 형식이 다를 때 잘못된 화면을 보여 줌, KLAS 화면을 바꾸는 content script 기능을 추가하거나 고쳤는데 `e2e/`의 가짜 KLAS 화면 테스트가 없음.
 - P0, P1 지적은 머지 게이트(`ai-gate`)가 머지를 막는다. P2 이하는 막지 않으므로, 머지 전에 꼭 고쳐야 하는 문제는 P1 이상으로 지적한다.
 - 지적에는 파일 위치, 실패하는 조건, 관찰한 결과, 기대 결과를 적는다. 취향 차이나 선택적 정리는 지적하지 않는다.
 - 원본 KLAS Helper 코드를 가져왔다면 출처와 MIT 저작권 표시가 있는지 확인한다.

@@ -46,6 +46,11 @@ export interface DomFixtureInfo {
   collectedOn: string;
   /** 남긴 한글 낱말(화면 이름표) */
   keepText: string[];
+  /**
+   * 실제 화면에서 모으지 않고 단위 테스트와 이슈에 적힌 구조로 직접 쓴 파일이면 true.
+   * 실제 화면 발췌를 모으면 그 파일로 바꾼다.
+   */
+  handwritten?: boolean;
 }
 
 export interface DomAnonymizeResult {

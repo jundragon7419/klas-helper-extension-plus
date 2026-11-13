@@ -14,11 +14,27 @@ export function parseCodexState(body) {
   }
 }
 
+/** 머지 전에 통과해야 하는 CI 작업(check run 이름). CI 워크플로의 job 이름과 같다. */
+export const CI_CHECKS = ['check', 'e2e'];
+
 /**
  * check run 목록을 하나의 상태로 줄인다.
  * 같은 커밋에서 CI가 다시 돌면(PR 본문 수정, 재실행) 취소된 이전 run이 남으므로, id가 있으면 가장 최근 run만 본다.
+ * run에 name이 있으면 CI_CHECKS의 이름마다 따로 줄인 뒤 합친다. 하나라도 실패면 실패, 모두 성공이어야 성공이다.
  */
 export function summarizeChecks(runs) {
+  if (runs.some((r) => typeof r.name === 'string')) {
+    const parts = CI_CHECKS.map((name) =>
+      summarizeChecks(
+        runs
+          .filter((r) => r.name === name)
+          .map((r) => ({ id: r.id, status: r.status, conclusion: r.conclusion })),
+      ),
+    );
+    if (parts.includes('failure')) return 'failure';
+    if (parts.every((p) => p === 'success')) return 'success';
+    return parts.every((p) => p === 'missing') ? 'missing' : 'pending';
+  }
   if (runs.length === 0) return 'missing';
   if (runs.every((r) => typeof r.id === 'number')) {
     runs = [runs.reduce((a, b) => (b.id > a.id ? b : a))];

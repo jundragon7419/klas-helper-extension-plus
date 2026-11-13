@@ -16,7 +16,7 @@
 5. `AI review loop` 워크플로가 결과를 판단한다.
    - 현재 커밋에 Codex 지적이 있거나 CI가 실패하면 Claude가 고쳐서 커밋한다. Claude는 push하지 않는다. 다음 작업(`push-fix`)이 커밋을 검사하고 `MAINTAINER_PR_TOKEN`으로 같은 브랜치에 push한 뒤, Codex는 push를 스스로 다시 검토하지 않으므로 `@codex review`를 달아 재검토를 요청한다. 회차마다 `ai:round-N` 라벨이 붙는다.
    - 검토 반영을 메인테이너 토큰으로 push하는 이유: `GITHUB_TOKEN`으로 push하면 그 push로 시작되는 CI와 AI review loop가 승인 대기 상태가 되어 사용자가 직접 승인해야 한다.
-   - Codex 요약 댓글의 상태 표시(`codex-review-state`)가 현재 커밋의 검토 완료를 가리키고, 그 커밋에 Codex 지적이 없고, CI `check`가 성공하면 `ai:ready`로 바꾸고 사용자를 호출한다. 그 뒤에 지적이 도착하면 `ai:in-progress`로 되돌리고 고친다.
+   - Codex 요약 댓글의 상태 표시(`codex-review-state`)가 현재 커밋의 검토 완료를 가리키고, 그 커밋에 Codex 지적이 없고, CI `check`와 `e2e`가 성공하면 `ai:ready`로 바꾸고 사용자를 호출한다. 그 뒤에 지적이 도착하면 `ai:in-progress`로 되돌리고 고친다.
 6. 사용자가 PR과 "KLAS에서 직접 확인할 항목"을 확인하고 PR 본문의 Squash 커밋 메시지로 머지한다. 머지 버튼은 머지 게이트(`ai-gate`)가 성공일 때만 열린다(아래 "머지 게이트"). 결과를 바꾸고 싶으면 머지하지 않고 아래 "PR 수정 요청"으로 요청한다.
 
 ### PR 수정 요청
@@ -93,11 +93,11 @@ AI 간 메시지는 `AGENTS.md` "AI 메시지 형식"(ai-msg v1)으로 옮긴다
 
 ## 머지 게이트
 
-`develop`으로 가는 모든 PR(자동 흐름과 사람이 연 PR 모두)은 head 커밋의 commit status `ai-gate`가 성공이어야 머지할 수 있다. ruleset "Protect develop"이 CI `check`와 함께 필수 검사로 요구한다. 판단은 `scripts/ai/merge-gate.js`, 기록은 `Merge gate` 워크플로가 한다.
+`develop`으로 가는 모든 PR(자동 흐름과 사람이 연 PR 모두)은 head 커밋의 commit status `ai-gate`가 성공이어야 머지할 수 있다. ruleset "Protect develop"이 CI `check`와 함께 필수 검사로 요구한다. CI `e2e`는 ruleset에 따로 넣지 않고 `ai-gate`가 성공 조건으로 본다. 판단은 `scripts/ai/merge-gate.js`, 기록은 `Merge gate` 워크플로가 한다.
 
 | 상태 | 조건 |
 |---|---|
-| 성공 | 현재 커밋의 Codex 리뷰가 끝났고, 현재 커밋에서 단 P0/P1 지적이 없고, CI `check`의 최신 실행이 성공했고, `ai:in-progress`와 `ai:needs-human` 라벨이 없음 |
+| 성공 | 현재 커밋의 Codex 리뷰가 끝났고, 현재 커밋에서 단 P0/P1 지적이 없고, CI `check`와 `e2e`의 최신 실행이 각각 성공했고, `ai:in-progress`와 `ai:needs-human` 라벨이 없음 |
 | 대기 | CI 진행 중, 현재 커밋의 Codex 리뷰가 아직 없음, 자동 흐름 진행 중(`ai:in-progress`) |
 | 실패 | CI 실패, 현재 커밋에 P0/P1 지적이 있음, 자동 흐름이 멈춤(`ai:needs-human`) |
 

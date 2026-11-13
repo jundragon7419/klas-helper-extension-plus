@@ -55,6 +55,35 @@ describe('parseCodexState', () => {
 });
 
 describe('summarizeChecks', () => {
+  it('이름이 있으면 check와 e2e를 따로 보고 합친다', () => {
+    const run = (
+      id: number,
+      name: string,
+      status = 'completed',
+      conclusion: string | null = 'success',
+    ) => ({
+      id,
+      name,
+      status,
+      conclusion,
+    });
+    expect(summarizeChecks([run(1, 'check'), run(2, 'e2e')])).toBe('success');
+    expect(summarizeChecks([run(1, 'check')])).toBe('pending');
+    expect(summarizeChecks([run(1, 'check'), run(2, 'e2e', 'completed', 'failure')])).toBe(
+      'failure',
+    );
+    expect(summarizeChecks([run(1, 'check'), run(2, 'e2e', 'in_progress', null)])).toBe('pending');
+    // e2e를 다시 돌려 성공하면 이전 실패는 보지 않는다.
+    expect(
+      summarizeChecks([run(1, 'check'), run(2, 'e2e', 'completed', 'failure'), run(3, 'e2e')]),
+    ).toBe('success');
+    // 다른 이름의 실패는 다른 이름의 최신 성공을 가리지 않는다.
+    expect(
+      summarizeChecks([run(5, 'check', 'completed', 'failure'), run(2, 'e2e'), run(4, 'check')]),
+    ).toBe('failure');
+    expect(summarizeChecks([run(1, 'other')])).toBe('missing');
+  });
+
   it('없음, 진행 중, 성공, 실패를 구분한다', () => {
     expect(summarizeChecks([])).toBe('missing');
     expect(summarizeChecks([{ status: 'in_progress', conclusion: null }])).toBe('pending');

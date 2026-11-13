@@ -1,6 +1,6 @@
 // 머지 게이트(commit status `ai-gate`)의 상태를 정한다. develop ruleset이 이 상태를 필수 검사로 요구한다.
 // GitHub API 호출은 merge-gate 워크플로가 하고, 이 파일은 모은 자료로 판단만 한다. tests/merge-gate.test.ts가 검사한다.
-import { parseCodexState, summarizeChecks } from './review-decision.js';
+import { CI_CHECKS, parseCodexState, summarizeChecks } from './review-decision.js';
 import { parseMessage } from './ai-msg.js';
 
 export const GATE_CONTEXT = 'ai-gate';
@@ -132,10 +132,11 @@ export async function updateGate({ github, context, core, number, codexBot, runU
     await github.paginate(github.rest.checks.listForRef, {
       ...repo,
       ref: head,
-      check_name: 'check',
       filter: 'all',
     })
-  ).map((r) => ({ id: r.id, status: r.status, conclusion: r.conclusion }));
+  )
+    .filter((r) => CI_CHECKS.includes(r.name))
+    .map((r) => ({ id: r.id, name: r.name, status: r.status, conclusion: r.conclusion }));
 
   const gate = decideGate({
     head,
