@@ -7,7 +7,6 @@ import { validateMessage } from './ai-msg.js';
 /** PR 하나에서 실행할 수 있는 change 수. */
 export const MAX_CHANGES = 3;
 
-const REV_TYPES = ['plan-rev', 'change'];
 const CHANGE_HEADER_RE = /<!--\s*ai-msg:\S*\s+type=change\b/i;
 
 /**
