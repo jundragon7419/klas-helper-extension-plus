@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { decideGate, GATE_CONTEXT, updateGate, type GateInput } from '../scripts/ai/merge-gate.js';
+import {
+  codeChangeEn,
+  codeChangeKo,
+  reviewNoFindings,
+  reviewWithP1,
+} from './helpers/codex-tasks.ts';
 
 // 머지 게이트(scripts/ai/merge-gate.js)의 판단을 검사한다.
 const CODEX = 'chatgpt-codex-connector[bot]';
@@ -166,6 +172,46 @@ describe('decideGate', () => {
       'failure',
     );
     expect(decideGate(input({ labels: ['ai:ready', 'ai:round-1'] })).state).toBe('success');
+  });
+
+  it('실제 작업 결과 리뷰 모양을 리뷰로 인정한다(PR #128, #129)', () => {
+    const c = (body: string) => ({ login: CODEX, body });
+    expect(decideGate(input({ comments: [c(reviewNoFindings(HEAD))] })).state).toBe('success');
+    expect(decideGate(input({ comments: [c(reviewWithP1(HEAD))] }))).toEqual({
+      state: 'failure',
+      description: 'Codex P0/P1 지적 1건이 현재 커밋에 있음',
+    });
+  });
+
+  it('Codex가 코드를 고친 작업 결과는 리뷰로 세지 않고 막는다(PR #126, #135)', () => {
+    for (const body of [codeChangeKo(HEAD), codeChangeEn(HEAD)]) {
+      const gate = decideGate(
+        input({ comments: [{ login: CODEX, body, at: '2026-11-13T02:13:02Z' }] }),
+      );
+      expect(gate.state).toBe('failure');
+      expect(gate.description).toContain('코드 수정 작업');
+    }
+  });
+
+  it('코드 수정 결과 뒤에 현재 커밋을 다시 리뷰받으면 그 리뷰로 판단한다', () => {
+    const change = { login: CODEX, body: codeChangeEn(HEAD), at: '2026-11-13T02:13:02Z' };
+    const later = { ...receipt(HEAD), at: '2026-11-13T04:59:31Z' };
+    const earlier = { ...receipt(HEAD), at: '2026-11-13T01:00:00Z' };
+    expect(decideGate(input({ comments: [change, later] })).state).toBe('success');
+    expect(decideGate(input({ comments: [earlier, change] })).state).toBe('failure');
+    expect(
+      decideGate(
+        input({
+          comments: [change],
+          reviews: [{ login: CODEX, commitId: HEAD, at: '2026-11-13T05:00:00Z' }],
+        }),
+      ).state,
+    ).toBe('success');
+  });
+
+  it('이전 커밋의 코드 수정 결과는 현재 커밋을 막지 않는다', () => {
+    const change = { login: CODEX, body: codeChangeEn(OLD), at: '2026-11-13T02:13:02Z' };
+    expect(decideGate(input({ comments: [stateComment(HEAD), change] })).state).toBe('success');
   });
 
   it('상태 설명은 GitHub 제한(140자) 안이다', () => {

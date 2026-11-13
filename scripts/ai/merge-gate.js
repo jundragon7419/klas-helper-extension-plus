@@ -1,70 +1,18 @@
 // 머지 게이트(commit status `ai-gate`)의 상태를 정한다. develop ruleset이 이 상태를 필수 검사로 요구한다.
 // GitHub API 호출은 merge-gate 워크플로가 하고, 이 파일은 모은 자료로 판단만 한다. tests/merge-gate.test.ts가 검사한다.
-import { CI_CHECKS, parseCodexState, summarizeChecks } from './review-decision.js';
-import { parseMessage } from './ai-msg.js';
+import { CI_CHECKS, codexResults, summarizeChecks } from './review-decision.js';
 
 export const GATE_CONTEXT = 'ai-gate';
 
 /** Codex 지적 중 머지를 막는 등급. P2 이하는 막지 않는다(AGENTS.md "Review guidelines"). */
 const BLOCKING_BADGE = /!\[P[01] Badge\]/;
-/** 작업 결과 댓글 형태의 리뷰에서 지적 등급 표시. 예: `**[P1] 제목**` */
-const BLOCKING_TAG = /\[P[01]\]/g;
-
-/**
- * ai-msg 메시지인지 본다. 표시 줄은 첫 줄, 또는 멘션 줄 다음 줄에만 온다(AGENTS.md "AI 메시지 형식").
- * 리뷰 본문 안에 인용한 표시 줄 예시는 메시지가 아니다.
- */
-function isAiMessage(body) {
-  if (parseMessage(body) !== null) return true;
-  const [first = '', second = ''] = body
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((l) => l.trim());
-  const header = /^<!--\s*ai-msg\b/i;
-  return header.test(first) || (/^@(claude|codex)$/.test(first) && header.test(second));
-}
-
-/**
- * Codex가 리뷰를 GitHub 리뷰가 아닌 작업 결과 댓글로 남긴 경우(`View task →` 링크가 있는 일반 댓글).
- * 현재 head의 파일 링크(`/blob/<head>/`)가 있어야 현재 커밋을 본 것으로 인정한다.
- * ai-msg 메시지, 요약 상태 댓글, 리뷰 응답 댓글은 제외한다.
- */
-function taskReviews({ head, comments, codexBot }) {
-  return comments.filter(
-    (c) =>
-      c.login === codexBot &&
-      c.body.includes('View task') &&
-      c.body.includes(`/blob/${head}/`) &&
-      !c.body.includes('codex-review-state') &&
-      !c.body.includes('codex-review-receipt') &&
-      !isAiMessage(c.body),
-  );
-}
-
-/**
- * Codex가 현재 head를 검토했는지 본다. 요약 댓글의 상태 표시, 리뷰 객체, `@codex review` 응답,
- * 현재 head를 가리키는 작업 결과 댓글 중 하나면 된다.
- */
-function reviewedHead({ head, comments, reviews, codexBot }) {
-  const short = head.slice(0, 10);
-  return (
-    taskReviews({ head, comments, codexBot }).length > 0 ||
-    reviews.some((r) => r.login === codexBot && r.commitId === head) ||
-    comments.some((c) => {
-      if (c.login !== codexBot) return false;
-      const state = parseCodexState(c.body);
-      if (state?.commit_sha === head && state.status === 'completed') return true;
-      return c.body.includes('codex-review-receipt') && c.body.includes(`\`${short}`);
-    })
-  );
-}
 
 /**
  * @param {object} input
  * @param {string} input.head PR head SHA
  * @param {string[]} input.labels PR 라벨
- * @param {{login: string, body: string}[]} input.comments PR 댓글
- * @param {{login: string, commitId: string}[]} input.reviews PR 리뷰
+ * @param {{id?: number, login: string, body: string, at?: string}[]} input.comments PR 댓글(at은 마지막 수정 시각)
+ * @param {{login: string, commitId: string, at?: string}[]} input.reviews PR 리뷰(at은 제출 시각)
  * @param {{login: string, originalCommitId: string, body: string}[]} input.inlineComments 줄 단위 리뷰 댓글
  * @param {{id?: number, status: string, conclusion: string | null}[]} input.checkRuns head의 CI check 결과
  * @param {string} input.codexBot Codex 봇 로그인
@@ -80,22 +28,32 @@ export function decideGate(input) {
   const ci = summarizeChecks(input.checkRuns);
   if (ci === 'failure') return { state: 'failure', description: 'CI check 실패' };
 
+  const results = codexResults({
+    head,
+    codexBot,
+    comments: input.comments,
+    reviews: input.reviews,
+  });
+
   // 현재 head에서 처음 단 지적만 센다. 이전 커밋의 지적은 GitHub가 새 커밋 위치로 옮겨 보여 줄 뿐이다.
   const blocking =
     input.inlineComments.filter(
       (c) => c.login === codexBot && c.originalCommitId === head && BLOCKING_BADGE.test(c.body),
-    ).length +
-    taskReviews({ head, comments: input.comments, codexBot }).reduce(
-      (n, c) => n + (c.body.match(BLOCKING_TAG)?.length ?? 0),
-      0,
-    );
+    ).length + results.reviewTasks.reduce((n, c) => n + c.task.blocking, 0);
   if (blocking > 0) {
     return { state: 'failure', description: `Codex P0/P1 지적 ${blocking}건이 현재 커밋에 있음` };
   }
+  // Codex가 리뷰 대신 코드를 고친 작업 결과는 고칠 문제를 찾았다는 뜻이다. 그 뒤에 다시 리뷰를 받아야 통과한다.
+  if (results.unresolvedChange) {
+    return {
+      state: 'failure',
+      description:
+        'Codex가 현재 커밋에 코드 수정 작업을 남김. 확인 뒤 @codex review로 다시 리뷰 필요',
+    };
+  }
 
   if (ci !== 'success') return { state: 'pending', description: 'CI check 대기 중' };
-  if (!reviewedHead(input))
-    return { state: 'pending', description: '현재 커밋의 Codex 리뷰 대기 중' };
+  if (!results.reviewed) return { state: 'pending', description: '현재 커밋의 Codex 리뷰 대기 중' };
   if (labels.includes('ai:in-progress')) {
     return { state: 'pending', description: 'AI 자동 흐름 진행 중' };
   }
@@ -117,10 +75,10 @@ export async function updateGate({ github, context, core, number, codexBot, runU
   const head = pr.head.sha;
   const comments = (
     await github.paginate(github.rest.issues.listComments, { ...repo, issue_number: number })
-  ).map((c) => ({ login: c.user?.login ?? '', body: c.body ?? '' }));
+  ).map((c) => ({ id: c.id, login: c.user?.login ?? '', body: c.body ?? '', at: c.updated_at }));
   const reviews = (
     await github.paginate(github.rest.pulls.listReviews, { ...repo, pull_number: number })
-  ).map((r) => ({ login: r.user?.login ?? '', commitId: r.commit_id }));
+  ).map((r) => ({ login: r.user?.login ?? '', commitId: r.commit_id, at: r.submitted_at }));
   const inlineComments = (
     await github.paginate(github.rest.pulls.listReviewComments, { ...repo, pull_number: number })
   ).map((c) => ({

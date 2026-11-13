@@ -127,7 +127,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const { decideReview, decideAnswerRestart } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/review-decision.js`);
+            const { codeChangeNotice, decideReview, decideAnswerRestart } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/review-decision.js`);
             const { classifyCodexReply, expectedIssueOf, rolesOf } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/relay.js`);
             const { classifyChange, collectRevisions, decideChange, formatPlan, revisionRecordBody } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/change.js`);
             const { formatErrorBody, parseMessage } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/ai-msg.js`);
@@ -139,7 +139,7 @@ jobs:
             const { data: pr } = await github.rest.pulls.get({ ...repo, pull_number: number });
             const head = pr.head.sha;
             const comments = (await github.paginate(github.rest.issues.listComments, { ...repo, issue_number: number }))
-              .map((c) => ({ id: c.id, login: c.user?.login ?? '', body: c.body ?? '' }));
+              .map((c) => ({ id: c.id, login: c.user?.login ?? '', body: c.body ?? '', at: c.updated_at }));
             const roles = rolesOf({ codexBot: process.env.CODEX_BOT, maintainer: process.env.MAINTAINER });
             // PR 스레드의 메시지는 PR이 닫는 이슈 번호를 issue 값으로 쓴다.
             const expectedIssue = expectedIssueOf({ number, headRef: pr.head.ref });
@@ -156,7 +156,7 @@ jobs:
             for (const r of await github.paginate(github.rest.pulls.listReviews, { ...repo, pull_number: number })) {
               if (r.user?.login !== process.env.CODEX_BOT || r.commit_id !== head) continue;
               const inline = await github.paginate(github.rest.pulls.listCommentsForReview, { ...repo, pull_number: number, review_id: r.id });
-              reviews.push({ id: r.id, login: r.user.login, commitId: r.commit_id, inlineCount: inline.length });
+              reviews.push({ id: r.id, login: r.user.login, commitId: r.commit_id, inlineCount: inline.length, at: r.submitted_at });
             }
             // CI의 check와 e2e 작업을 함께 본다(CI_CHECKS).
             const { CI_CHECKS } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ai/review-decision.js`);
@@ -231,6 +231,10 @@ jobs:
             if (d.action === 'stop') {
               // 알림은 Codex 정리 뒤에 ai-relay 워크플로가 보낸다. 여기서는 멈춘 사실만 남긴다.
               await say(`검토 반영을 3회 했지만 남은 지적이 있어 자동 흐름을 멈췄습니다 (${d.reason}).`);
+            }
+            if (d.action === 'halt' && !change) {
+              // Codex가 리뷰 대신 코드를 고친 작업 결과를 남겼다(review-decision.js codexResults).
+              await say(codeChangeNotice({ maintainer: process.env.MAINTAINER, head, url: `${pr.html_url}#issuecomment-${d.notice}` }));
             }
             if (d.action === 'ready') {
               await say([`@${process.env.MAINTAINER} 확인 준비가 끝났습니다.`, '',
@@ -310,6 +314,10 @@ jobs:
             gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
               --jq '[.[] | select(.user.login == "claude[bot]") | .body]' > .ai-context/claude-messages.json
           fi
+          # 작업 결과 댓글로 온 Codex 리뷰: 그 댓글을 넘긴다.
+          if [[ "$TASK" == task-* ]]; then
+            gh api "repos/$GH_REPO/issues/comments/${TASK#task-}" --jq .body > .ai-context/codex-task.md
+          fi
           # 계획(이슈 본문과 최신 개정)은 evaluate가 기본 브랜치의 판단 코드로 만든다.
           if [ -n "$PLAN" ]; then printf '%s\n' "$PLAN" > .ai-context/plan.md; fi
           # 사용자 수정 요청: Codex change와 그 근거가 된 사용자 댓글을 넘긴다.
@@ -337,6 +345,7 @@ jobs:
             1. 루트 AGENTS.md와 docs/AI-COLLABORATION.md를 먼저 읽고 그 규칙을 따른다.
             2. 검토 자료는 `.ai-context/`에 있다: reviews.json(Codex 리뷰 본문), review-comments.json(줄 단위 지적), ci-failure.log(CI 실패 로그, 실패했을 때만), npm-ci.log(이 작업의 의존성 설치 로그).
                의존성 설치가 실패했다면 `npm install`로 package-lock.json을 맞춘다.
+               codex-task.md가 있으면 Codex가 리뷰를 작업 결과 댓글로 남긴 것이다. 그 안의 `[P0]`~`[P3]` 지적을 줄 단위 지적처럼 다룬다.
                answer.md가 있으면 Claude가 앞서 남긴 ask나 objection(claude-messages.json)에 대한 Codex 답이다. 그 답을 반영해 멈춘 작업(현재 head의 Codex 지적이나 CI 실패)을 이어 간다.
                plan.md는 이 작업의 계획이다(이슈 본문이 rev 0, 개정은 rev가 큰 것이 우선). 고칠 때 최신 rev의 완료 조건을 기준으로 한다.
                change.md가 있으면 사용자 수정 요청(request.md)을 Codex가 정리한 change다. 이번 작업은 리뷰 지적 대신 change의 "바꿀 항목"을 최신 rev 계획에 맞춰 고치는 것이다.
