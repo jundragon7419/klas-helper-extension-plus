@@ -67,7 +67,8 @@ export const MESSAGE_TYPES = {
     to: 'claude',
     mention: '@claude',
     header: ['issue', 'pr', 'rev', 'reply-to'],
-    fields: ['바꿀 항목'],
+    // Codex는 요청받은 PR 스레드에만 댓글을 달 수 있어 계획 개정 내용을 change에 함께 적는다.
+    fields: ['바뀐 완료 조건', '이유', '바꿀 항목'],
   },
   objection: {
     from: ['claude'],

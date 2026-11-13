@@ -81,6 +81,19 @@ describe('decidePing', () => {
     expect(decide([reply(-5), relay(), summary]).ping).toBeNull();
   });
 
+  it('사용자 수정 요청에 대한 change는 정리 답으로 보지 않는다', () => {
+    const change = reply(
+      2,
+      formatMessage(
+        { type: 'change', issue: 104, pr: 111, rev: 1, 'reply-to': 5 },
+        { '바뀐 완료 조건': '전 / 후', 이유: '요청', '바꿀 항목': '- 색' },
+      ),
+    );
+    expect(decide([relay(), change]).ping).toBeNull();
+    expect(decide([relay(), change], 40)).toEqual({ ping: 'timeout', key: 'run-1' });
+    expect(decide([relay(), change, reply(3)])).toEqual({ ping: 'codex', key: 'run-1' });
+  });
+
   it('이미 알렸으면 다시 알리지 않는다', () => {
     const pinged = {
       login: PING_BOT,
