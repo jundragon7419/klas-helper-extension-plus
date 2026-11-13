@@ -11,6 +11,7 @@
    - 사용자가 이슈에 `@claude`로 시작하는 댓글을 직접 단다.
    - 사용자가 Codex 대화에서 이슈 번호를 들어 진행을 승인하면, Codex가 사용자 계정으로 그 이슈에 `@claude` 댓글을 단다.
    이 댓글이 구현 시작 신호다. 댓글에 덧붙인 내용은 구현 지시로 쓴다.
+   영역에 "content script (KLAS 화면)"이 있는 이슈는 "대상 화면과 DOM 발췌" 칸이 채워져 있어야 시작한다. 비어 있으면 Codex는 `@claude` 대신 `need-user`로 필요한 화면을 알리고, Claude도 구현하지 않고 `ask`로 멈춘다(`AGENTS.md` "Codex의 구현 시작 댓글").
 3. `AI implement` 워크플로에서 Claude가 브랜치를 만들어 구현하고, 검사를 통과시킨 뒤 커밋, push하고 PR 제목과 본문을 쓴다. 다음 단계가 `MAINTAINER_PR_TOKEN`으로 메인테이너 계정의 PR을 `develop`에 연다. Codex 자동 리뷰는 메인테이너가 연 PR에만 붙는다. PR에는 `ai:in-progress` 라벨이 붙는다.
 4. Codex 자동 리뷰가 PR의 현재 커밋을 검토한다. 검토 기준은 루트 `AGENTS.md`의 "Review guidelines"다.
 5. `AI review loop` 워크플로가 결과를 판단한다.
@@ -52,7 +53,7 @@
    - `answer`이고 `재시작: 예`이며 Claude 메시지와 답의 `issue` 값이 이 스레드의 이슈(PR은 PR이 닫는 이슈)와 같음: Claude를 다시 부른다. 이슈는 `AI implement`, PR은 `AI review loop`를 `workflow_dispatch`로 실행하고, 두 워크플로가 근거(이 스레드의 Claude 메시지에 대한 Codex 답, 이슈는 이전 메인테이너 `@claude` 승인)를 다시 확인한다. 사용자는 부르지 않는다. 다시 부른 워크플로가 근거 확인이나 회차 제한으로 시작하지 못하면 그 이유와 함께 사용자를 부른다.
    - `need-user`, `재시작: 아니오`, 형식 오류: 사용자를 멘션해 알린다. 형식 오류면 오류 목록도 남긴다.
    - 30분 안에 Codex 답이 없으면 그대로 알린다.
-5. 사용자는 필요한 정보를 `@codex`로 시작하는 댓글로 준다. Codex가 그 정보로 처음 질문에 `answer`를 다시 달면 4번으로 이어진다. 사용자가 직접 다시 시작하려면 이슈는 `@claude` 댓글, PR은 `ai:needs-human` 라벨 제거로 할 수 있다.
+5. 사용자는 필요한 정보를 `@codex`로 시작하는 댓글로 준다. Codex가 그 정보로 처음 질문에 `answer`를 다시 달면 4번으로 이어진다. 사용자가 직접 다시 시작하려면 이슈는 `@claude` 댓글, PR은 `ai:needs-human` 라벨 제거로 할 수 있다. 어느 쪽이든 멈춘 이유를 풀 새 정보(답, DOM 발췌, 계획 개정)가 생긴 뒤에만 다시 시작한다. 새 정보 없이 다시 시작하면 같은 이유로 다시 멈춘다(`AGENTS.md` "멈춘 이슈를 다시 시작할 때").
 
 Codex 리뷰가 오지 않는 경우(3시간 무응답)는 Codex에게 요청하지 않고 바로 사용자에게 알린다.
 

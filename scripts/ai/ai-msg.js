@@ -28,6 +28,10 @@ export const MESSAGE_TYPES = {
     to: 'claude',
     header: ['issue', 'rev'],
     fields: ['배경', '할 일', '완료 조건'],
+    // 화면을 고치는 작업은 대상 화면 DOM이 없으면 구현할 수 없다(#104, #105에서 멈춤).
+    requiredWhen: {
+      '대상 화면과 DOM 발췌': { field: '영역', includes: 'content script (KLAS 화면)' },
+    },
   },
   start: {
     from: ['codex', 'maintainer'],
@@ -123,6 +127,9 @@ function fencedLines(lines) {
     return false;
   });
 }
+
+/** GitHub 이슈 양식은 비운 칸을 `_No response_`로 적는다. */
+const isEmptyField = (value) => !value || value === '_No response_';
 
 /** 실제로 정의된 종류만 찾는다. `constructor` 같은 상속 속성은 종류가 아니다. */
 const specOf = (type) => (Object.hasOwn(MESSAGE_TYPES, type) ? MESSAGE_TYPES[type] : undefined);
@@ -277,6 +284,14 @@ export function validateMessage(comment, roles) {
 
   for (const name of spec.fields) {
     if (!message.fields[name]) errors.push(`본문 절 "### ${name}"이 없거나 비어 있습니다.`);
+  }
+  for (const [name, rule] of Object.entries(spec.requiredWhen ?? {})) {
+    const condition = message.fields[rule.field] ?? '';
+    if (condition.includes(rule.includes) && isEmptyField(message.fields[name])) {
+      errors.push(
+        `${rule.field}에 "${rule.includes}"이 있으면 본문 절 "### ${name}"을 채워야 합니다.`,
+      );
+    }
   }
   for (const [name, allowed] of Object.entries(spec.values ?? {})) {
     const value = message.fields[name];

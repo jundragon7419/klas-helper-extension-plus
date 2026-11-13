@@ -71,6 +71,19 @@ body:
     validations:
       required: true
 
+  - type: textarea
+    id: dom
+    attributes:
+      label: 대상 화면과 DOM 발췌
+      description: |
+        영역에 "content script (KLAS 화면)"을 골랐으면 반드시 채웁니다. 이 칸이 비면 Claude 구현을 시작하지 않습니다.
+        화면 경로와, 고칠 부분의 DOM을 적어 주세요. `tests/fixtures/klas/dom/<페이지 이름>.html` 경로를 적거나,
+        `npm run fixtures:dom-snippet`으로 만든 익명화 HTML을 붙입니다(방법은 tests/fixtures/klas/README.md "화면 DOM 발췌").
+        학번, 이름, 과목명이 남은 원본 HTML은 붙이지 않습니다.
+      placeholder: |
+        화면: /std/lis/evltn/OnlineCntntsStdPage.do
+        DOM: tests/fixtures/klas/dom/online-lectures.html
+
   - type: input
     id: depends
     attributes:

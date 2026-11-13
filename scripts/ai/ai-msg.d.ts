@@ -24,6 +24,8 @@ export interface MessageSpec {
   header: string[];
   fields: string[];
   values?: Record<string, string[]>;
+  /** 다른 절의 내용에 따라 채워야 하는 절 */
+  requiredWhen?: Record<string, { field: string; includes: string }>;
 }
 
 export const MESSAGE_TYPES: Record<MessageType, MessageSpec>;

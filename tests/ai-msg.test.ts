@@ -307,6 +307,35 @@ describe('formatErrorBody', () => {
   });
 });
 
+describe('plan의 조건부 절', () => {
+  const plan = (area: string, dom: string | null) =>
+    formatMessage(
+      { type: 'plan', issue: 104, rev: 0 },
+      {
+        영역: area,
+        배경: '배경 내용',
+        '할 일': '- [ ] 할 일',
+        '완료 조건': '- 조건',
+        ...(dom === null ? {} : { '대상 화면과 DOM 발췌': dom }),
+      },
+    );
+
+  it('영역에 content script가 있으면 대상 화면과 DOM 발췌를 채워야 한다', () => {
+    for (const dom of [null, '_No response_']) {
+      const { errors } = check(ME, plan('content script (KLAS 화면), 문서', dom));
+      expect(errors.join()).toContain('대상 화면과 DOM 발췌');
+    }
+    expect(
+      check(ME, plan('content script (KLAS 화면)', 'tests/fixtures/klas/dom/home.html')).errors,
+    ).toEqual([]);
+  });
+
+  it('다른 영역이면 비어도 된다', () => {
+    expect(check(ME, plan('KLAS API 계층', null)).errors).toEqual([]);
+    expect(check(ME, plan('KLAS API 계층', '_No response_')).errors).toEqual([]);
+  });
+});
+
 describe('문서와의 일치', () => {
   const agents = readFileSync('AGENTS.md', 'utf8');
 
@@ -319,8 +348,18 @@ describe('문서와의 일치', () => {
     },
   );
 
-  it('plan의 필수 절이 작업 이슈 양식의 칸 이름과 같다', () => {
+  it('plan의 필수 절이 작업 이슈 양식의 필수 글 칸과 같다', () => {
     const form = readFileSync('.github/ISSUE_TEMPLATE/maintainer_task.yml', 'utf8');
-    for (const name of MESSAGE_TYPES.plan.fields) expect(form).toContain(`label: ${name}`);
+    // 칸마다 type, label, required를 읽는다. 드롭다운(종류, 영역)은 고르는 칸이라 절 검사에서 뺀다.
+    const blocks = form.split(/\n {2}- type: /).slice(1);
+    const required = blocks
+      .filter((b) => /^textarea\b/.test(b) && /required: true/.test(b))
+      .map((b) => /label: (.+)/.exec(b)?.[1]);
+    expect(required).toEqual(MESSAGE_TYPES.plan.fields);
+    for (const [name, rule] of Object.entries(MESSAGE_TYPES.plan.requiredWhen ?? {})) {
+      expect(form).toContain(`label: ${name}`);
+      expect(form).toContain(`label: ${rule.field}`);
+      expect(form).toContain(`- ${rule.includes}`);
+    }
   });
 });
