@@ -26,8 +26,9 @@ export function isAiMessage(body) {
 // 커밋 SHA(백틱 안 7~40자리 16진수)와 커밋했다는 말이 함께 있거나, PR을 만들었다는 말이 있거나, make_pr.
 // 리뷰 결과도 "현재 head 커밋 `0c8f02e` 기준"처럼 SHA를 쓰므로 "커밋"이라는 낱말만으로는 보지 않는다.
 const COMMIT_SHA = /`[0-9a-f]{7,40}`/;
+// 커밋도 완료 보고(과거형)만 본다. "커밋을 생성하기 전에", "commit the changes" 같은 권고는 코드 수정이 아니다(#149).
 const COMMIT_WORD =
-  /커밋(했|하였|으로 (저장|남|만들)|을 (만들|생성|남겼))|\bcommitted\b|\bcommit(ted)? (the |my )?changes?\b/i;
+  /커밋(했|하였|으로 (저장했|남겼|만들었)|을 (만들었|생성했|남겼))|\bcommitted\b/i;
 // PR은 "만들었다"는 완료 보고만 본다. "PR을 열지 못한 경우"처럼 리뷰가 PR 생성을 다루는 문장은 코드 수정이 아니다(#149).
 const CODE_CHANGE = [
   /\bmake_pr\b/,

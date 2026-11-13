@@ -104,3 +104,43 @@ describe('PR 생성을 다루는 리뷰', () => {
     }
   });
 });
+
+describe('커밋을 다루는 리뷰', () => {
+  const head = 'd'.repeat(40);
+  const review = (line: string) =>
+    [
+      '## 검토 결과',
+      '',
+      `현재 head 커밋 \`${head.slice(0, 7)}\` 기준으로 검토했습니다.`,
+      '',
+      `- **[P1] ${line}**  `,
+      `  설명 [scripts/ai/push-fix.shL1](https://github.com/o/r/blob/${head}/scripts/ai/push-fix.sh#L1)`,
+      '',
+      ' [View task →](https://chatgpt.com/s/cd_1)',
+    ].join('\n');
+
+  it('커밋 생성 권고나 설명은 리뷰로 둔다', () => {
+    for (const line of [
+      '커밋을 생성하기 전에 검사 실패를 전파하세요',
+      '커밋을 만들기 전에 브랜치를 확인하세요',
+      '커밋하지 않은 변경이 남으면 멈추세요',
+      'Commit the changes only after the checks pass',
+    ]) {
+      expect(classifyCodexTask(review(line), head)).toEqual({
+        kind: 'review',
+        findings: 1,
+        blocking: 1,
+      });
+    }
+  });
+
+  it('커밋했다는 완료 보고는 코드 수정으로 본다', () => {
+    for (const line of [
+      '변경 사항을 커밋했습니다',
+      '커밋을 만들었습니다',
+      'Committed the changes',
+    ]) {
+      expect(classifyCodexTask(review(line), head)?.kind).toBe('code-change');
+    }
+  });
+});
