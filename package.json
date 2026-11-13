@@ -20,7 +20,8 @@
     "check:build": "node scripts/ci/check-build-output.js",
     "lint:firefox": "web-ext lint --source-dir .output/firefox-mv3",
     "test:e2e": "playwright test",
-    "fixtures:snippet": "node scripts/fixtures/build-snippet.ts",
+    "fixtures:snippet": "node scripts/fixtures/build-snippet.ts api",
+    "fixtures:dom-snippet": "node scripts/fixtures/build-snippet.ts dom",
     "tokens:preview": "vite --config scripts/tokens-preview/vite.config.ts",
     "postinstall": "wxt prepare"
   },
