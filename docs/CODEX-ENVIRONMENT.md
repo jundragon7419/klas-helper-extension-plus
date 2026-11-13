@@ -33,7 +33,7 @@ Playwright Chromium이 있어야 Codex가 리뷰할 때 `npm run test:e2e`를 �
 ## 코드 리뷰
 
 - 코드 리뷰를 켜고 자동 리뷰(Automatic reviews)를 켠다. 메인테이너 계정이 연 PR에 자동으로 리뷰가 달린다.
-- PR을 연 뒤의 push는 다시 검토하지 않으므로, 검토 반영 push 뒤에는 워크플로(`scripts/ai/request-review.sh`)나 사용자가 `@codex review`를 단다.
+- PR을 연 뒤의 push는 다시 리뷰하기도 하고 하지 않기도 한다(#135). `Codex review request` 워크플로가 모든 PR에서 push 뒤 3분 안에 리뷰가 시작되지 않으면 `@codex review`를 단다(`scripts/ai/request-review.sh`).
 - 리뷰 기준은 AGENTS.md "Review guidelines"다.
 
 ## 확인할 것

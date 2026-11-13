@@ -1,0 +1,48 @@
+# develop으로 가는 PR에 새 커밋이 push되면 Codex 리뷰가 돌게 한다. 사람이 연 PR과 자동 흐름 PR 모두 대상이다.
+# Codex는 push된 커밋을 스스로 리뷰하기도 하고 하지 않기도 한다(#135). 3분 안에 리뷰가 시작되지 않을 때만
+# 메인테이너 계정으로 "@codex review"를 단다. 판단은 scripts/ai/request-review.sh, 흐름은 docs/AI-COLLABORATION.md "흐름"의 4를 따른다.
+name: Codex review request
+
+on:
+  pull_request:
+    branches: [develop]
+    types: [synchronize]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+# 기다리는 사이에 또 push되면 이전 커밋은 리뷰할 필요가 없으므로 이전 실행을 취소한다.
+concurrency:
+  group: codex-review-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  request:
+    # fork PR에는 메인테이너 토큰을 쓰지 않는다. draft는 Codex가 ready로 바뀔 때 리뷰한다.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # 판단 스크립트는 기본 브랜치에서 읽는다. 메인테이너 토큰이 PR 브랜치 파일에 닿지 않게 하기 위함이다.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: scripts/ai
+          persist-credentials: false
+
+      - name: Codex 리뷰 요청
+        env:
+          GH_TOKEN: ${{ secrets.MAINTAINER_PR_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ACTIONS_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+          # push 시각. 실행이 대기열에서 늦게 시작해도 push 뒤에 달린 👀와 @codex review를 놓치지 않게 한다.
+          REVIEW_SINCE: ${{ github.event.pull_request.updated_at }}
+          CODEX_BOT: chatgpt-codex-connector[bot]
+          MAINTAINER: jundragon7419
+        run: bash scripts/ai/request-review.sh

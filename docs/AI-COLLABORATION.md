@@ -20,6 +20,7 @@
 | `AI relay` | Claude 질문을 Codex에게 넘기고, Codex 답에 따라 Claude를 다시 부르거나 사용자에게 알린다 |
 | `Merge gate` | PR head 커밋에 머지 게이트 상태 `ai-gate`를 남긴다 |
 | `CI` | `check`(검사, 빌드)와 `e2e`(가짜 KLAS 화면 E2E, 스크린샷)를 돌린다 |
+| `Codex review request` | PR에 push한 뒤 3분 안에 Codex 리뷰가 시작되지 않으면 `@codex review`를 단다 |
 | `Firefox label` | PR 본문의 "릴리스 전 Firefox 확인 필요" 체크에 맞춰 `firefox-check` 라벨을 붙인다 |
 
 ## 흐름
@@ -60,11 +61,10 @@ Claude는 계획이 불분명하거나, 권한 추가, 공통 모듈 재작성, 
 
 ### 4. 리뷰와 검토 반영
 
-1. Codex가 PR의 현재 커밋을 리뷰한다. 기준은 AGENTS.md "Review guidelines"다. 새 커밋이 올라오면 Codex가 스스로 다시 리뷰한다.
+1. Codex가 PR의 현재 커밋을 리뷰한다. 기준은 AGENTS.md "Review guidelines"다. PR을 열 때는 Codex가 스스로 리뷰한다. push한 커밋은 스스로 리뷰하기도 하고 하지 않기도 하므로(#135), `Codex review request` 워크플로가 push 뒤 3분 안에 리뷰가 시작되지 않으면 메인테이너 계정으로 `@codex review`를 단다(`scripts/ai/request-review.sh`). 사람이 연 PR도 같고, 같은 커밋에는 한 번만 단다.
 2. `AI review loop`가 Codex 결과와 CI(`check`, `e2e`)를 본다.
    - 현재 커밋에 Codex 지적이 있거나 CI가 실패하면 Claude가 고쳐서 커밋하고 `report`를 남긴다(AGENTS.md "수정을 마쳤을 때 (Claude)"). 회차마다 `ai:round-N`이 붙고 3회까지 한다.
    - Claude는 push하지 않는다. `push-fix`가 커밋을 검사한 뒤 메인테이너 토큰으로 push한다(`scripts/ai/push-fix.sh`). `GITHUB_TOKEN`으로 push하면 이어지는 CI가 승인 대기에 걸리기 때문이다.
-   - push 뒤 Codex 자동 리뷰가 3분 안에 시작되지 않을 때만 `@codex review`를 단다(`scripts/ai/request-review.sh`). 둘 다 하면 같은 커밋을 두 번 리뷰한다.
 3. 현재 커밋의 Codex 리뷰가 지적 없이 끝나고 CI가 성공하면 `ai:ready`로 바꾸고 사용자를 부른다.
 
 ### 5. 수정 요청
@@ -141,7 +141,7 @@ Claude는 계획이 불분명하거나, 권한 추가, 공통 모듈 재작성, 
   | `<!-- ai-pinged:... -->` 알림 | `github-actions[bot]` |
 
 - 자동 흐름의 Claude는 `.github/workflows/` 파일을 push할 수 없다. `push-fix`는 브랜치 이름 규칙, 작업 중 원격 브랜치가 바뀌지 않음, fast-forward, 워크플로 변경 없음을 확인한 커밋만 push한다. 워크플로 변경은 예비 절차로 한다.
-- `MAINTAINER_PR_TOKEN`은 이 저장소만 대상으로 한 fine-grained token이다. 권한은 Contents, Pull requests, Issues 읽기/쓰기이고 Workflows 권한은 없다. `develop`과 `main`은 ruleset이 직접 push를 막으므로 이 토큰으로 push할 수 있는 곳은 작업 브랜치뿐이다. PR 열기, 검토 반영 push, Codex 재검토 요청, Codex 정리 요청에만 쓴다. 이 토큰으로 댓글을 달지 못하면 Actions 토큰으로 사용자에게 바로 알린다.
+- `MAINTAINER_PR_TOKEN`은 이 저장소만 대상으로 한 fine-grained token이다. 권한은 Contents, Pull requests, Issues 읽기/쓰기이고 Workflows 권한은 없다. `develop`과 `main`은 ruleset이 직접 push를 막으므로 이 토큰으로 push할 수 있는 곳은 작업 브랜치뿐이다. PR 열기, 검토 반영 push, Codex 재리뷰 요청, Codex 정리 요청에만 쓴다. 이 토큰으로 댓글을 달지 못하면 Actions 토큰으로 사용자에게 바로 알린다.
 - 이 토큰을 쓰는 작업과 판단 코드(`scripts/ai/`)는 기본 브랜치를 새로 체크아웃한 작업에서 실행한다. 이슈나 PR 내용에 심어진 지시로 Claude가 파일을 바꿔도 토큰과 판단 코드에 닿지 못하게 하기 위함이다.
 - 머지는 사용자만 한다.
 
@@ -151,7 +151,7 @@ Claude는 계획이 불분명하거나, 권한 추가, 공통 모듈 재작성, 
 
 1. 사용자가 구현 담당을 정한다. 기본은 Claude 구현, Codex 리뷰다.
 2. 구현 담당은 원격 `develop` 최신 커밋에서 작업 브랜치를 만들고, 검사를 모두 통과시킨 뒤 PR을 연다. 다른 사람이 남긴 미커밋 변경은 건드리지 않는다.
-3. 리뷰는 PR의 Codex 자동 리뷰를 쓴다. 지적은 구현 담당이 고쳐 같은 브랜치에 push하고, Codex가 새 커밋을 다시 리뷰한다. 3분이 지나도 리뷰가 시작되지 않으면 `@codex review`를 단다.
+3. 리뷰는 PR의 Codex 자동 리뷰를 쓴다. 지적은 구현 담당이 고쳐 같은 브랜치에 push한다. 새 커밋의 재리뷰는 `Codex review request` 워크플로가 챙긴다.
 4. 두 도구의 판단이 갈리거나 완료 조건을 바꿔야 하면 사용자가 정한다.
 5. `ai-gate`가 성공이면 사용자가 머지한다.
 
